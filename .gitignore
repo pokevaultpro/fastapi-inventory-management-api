@@ -1,25 +1,41 @@
-# Environment variables
+# Environment variables and local secrets
 .env
 .env.*
+!.env.example
 
-# Python
+# Python cache
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Virtual environments
 .venv/
 venv/
 env/
 
-# IDE
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE/editor files
 .idea/
 .vscode/
 
-# Alembic cache
-alembic/__pycache__/
+# Build/package output
+build/
+dist/
+*.egg-info/
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Large local frontend/demo assets omitted from the portfolio repo
+frontend/static/images/products/*
+!frontend/static/images/products/.gitkeep

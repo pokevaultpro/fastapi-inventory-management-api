@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -12,15 +14,28 @@ from fastapi.responses import JSONResponse
 
 
 
-app = FastAPI()
+app = FastAPI(
+    title='Inventory Management API',
+    description='FastAPI backend for grocery, supermarket, cart, recipe, favorites, and shopping-history workflows.',
+    version='1.0.0',
+)
+
+@app.get('/', tags=['health'])
+async def root():
+    return {'message': 'Inventory Management API', 'docs': '/docs'}
+
+@app.get('/health', tags=['health'])
+async def health_check():
+    return {'status': 'ok'}
 
 @app.exception_handler(Exception)
 async def all_exception_handler(request: Request, exc: Exception):
     import traceback
     print(traceback.format_exc())  # stampa completa in console
+    detail = str(exc) if os.getenv('DEBUG_ERRORS') == '1' else 'Internal server error'
     return JSONResponse(
         status_code=500,
-        content={"detail": str(exc)},  # restituisce il messaggio al client
+        content={'detail': detail},
     )
 
 app.add_middleware(

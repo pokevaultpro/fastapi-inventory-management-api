@@ -173,6 +173,10 @@ def test_cart(test_product):
     db.commit()
     yield [cart1, cart2]
     with engine.connect() as connection:
+        # Finalizing a cart creates shopping-history rows. Clean them here so
+        # later tests start from an isolated in-memory database state.
+        connection.execute(text("DELETE FROM shopping_history_items;"))
+        connection.execute(text("DELETE FROM shopping_history;"))
         connection.execute(text("DELETE FROM cart;"))
         connection.commit()
 

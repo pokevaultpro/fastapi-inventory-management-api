@@ -69,6 +69,11 @@ def test_create_cart_product_not_found(test_cart):
     assert cart_model is None
 
 def test_create_shopping_history(test_cart):
+    # The finalize endpoint only archives checked cart items.
+    # Mark the current user's cart item as checked before finalizing.
+    check_response = client.put(f'/cart/{test_cart[0].id}', json={'checked': True})
+    assert check_response.status_code == status.HTTP_204_NO_CONTENT
+
     response = client.post('/cart/finalize')
     assert response.status_code == status.HTTP_201_CREATED
     db = TestingSessionLocal()
@@ -76,9 +81,9 @@ def test_create_shopping_history(test_cart):
     assert shopping_history_model is not None
 
     created_at = datetime.fromisoformat(shopping_history_model.created_at)
-    now = datetime.now()
+    now = datetime.utcnow()
 
-    assert now - created_at < timedelta(seconds=5)
+    assert abs(now - created_at) < timedelta(seconds=5)
     assert shopping_history_model.total_items == 2
     assert shopping_history_model.total_price == 1.24
     assert shopping_history_model.user_id == 1
