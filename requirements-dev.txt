@@ -1,0 +1,6 @@
+-r requirements.txt
+pytest
+pytest-asyncio
+httpx
+bcrypt==4.0.1
+passlib[bcrypt]==1.7.4
