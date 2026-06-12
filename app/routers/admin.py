@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Annotated, Optional, Any
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from starlette import status
 
@@ -20,16 +20,20 @@ from app.models import (
     Users,
 )
 from app.routers.auth import get_current_user
-from app.services.schema_compat import ensure_schema_compat
+
+try:
+    from app.services.schema_compat import ensure_schema_compat
+except Exception:
+    ensure_schema_compat = None
+
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
 _schema_checked = False
 
 
 def ensure_schema_ready() -> None:
     global _schema_checked
-    if not _schema_checked:
+    if not _schema_checked and ensure_schema_compat is not None:
         ensure_schema_compat(engine)
         _schema_checked = True
 
@@ -52,29 +56,54 @@ def require_admin(user: dict) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
 
+def model_column_names(model) -> set[str]:
+    return {column.name for column in model.__table__.columns}
+
+
+def safe_model_data(model, data: dict) -> dict:
+    available = model_column_names(model)
+    return {key: value for key, value in data.items() if key in available}
+
+
+def assign_known_fields(instance, data: dict) -> list[str]:
+    available = model_column_names(instance.__class__)
+    ignored: list[str] = []
+    for key, value in data.items():
+        if key in available:
+            setattr(instance, key, value)
+        else:
+            ignored.append(key)
+    return ignored
+
+
 def product_price(product: Products) -> float:
-    discounted = product.discounted_price
-    if discounted is not None and product.original_price is not None and discounted < product.original_price:
+    discounted = getattr(product, "discounted_price", None)
+    original = getattr(product, "original_price", None)
+    if discounted is not None and original is not None and discounted < original:
         return float(discounted)
-    return float(product.original_price or 0)
+    return float(original or 0)
 
 
 def serialize_product(product: Products) -> dict:
-    return {
-        column.name: getattr(product, column.name)
-        for column in product.__table__.columns
-    } | {
-        "current_price": product_price(product),
-        "supermarket_name": product.supermarket.name if getattr(product, "supermarket", None) else None,
-    }
+    base = {column.name: getattr(product, column.name, None) for column in product.__table__.columns}
+    base["current_price"] = product_price(product)
+    base["supermarket_name"] = product.supermarket.name if getattr(product, "supermarket", None) else None
+    for key in [
+        "brand", "flyer_page", "flyer_valid_from", "flyer_valid_to",
+        "flyer_source", "flyer_source_url", "is_lidl_plus", "flyer_imported_at",
+        "offer_note", "discount_percent", "location", "calories", "fat",
+        "carbs", "protein", "aisle_order",
+    ]:
+        base.setdefault(key, getattr(product, key, None))
+    return base
 
 
 def serialize_supermarket(sm: Supermarkets) -> dict:
     return {
         "id": sm.id,
         "name": sm.name,
-        "image": sm.image,
-        "location": sm.location,
+        "image": getattr(sm, "image", None),
+        "location": getattr(sm, "location", None),
         "products_count": len(sm.products or []),
     }
 
@@ -117,7 +146,7 @@ class AdminProductIn(BaseModel):
     discounted_price: Optional[float] = Field(default=None, gt=0)
     unit: str = Field(default="pz", max_length=60)
     supermarket_id: int = Field(gt=0)
-    aisle_order: float = 999
+    aisle_order: Optional[float] = 999
     image: Optional[str] = None
     calories: Optional[float] = None
     fat: Optional[float] = None
@@ -128,6 +157,8 @@ class AdminProductIn(BaseModel):
     flyer_page: Optional[int] = None
     flyer_valid_from: Optional[str] = None
     flyer_valid_to: Optional[str] = None
+    flyer_source: Optional[str] = None
+    flyer_source_url: Optional[str] = None
     is_lidl_plus: bool = False
     offer_note: Optional[str] = None
     discount_percent: Optional[float] = None
@@ -151,6 +182,8 @@ class AdminProductPatch(BaseModel):
     flyer_page: Optional[int] = None
     flyer_valid_from: Optional[str] = None
     flyer_valid_to: Optional[str] = None
+    flyer_source: Optional[str] = None
+    flyer_source_url: Optional[str] = None
     is_lidl_plus: Optional[bool] = None
     offer_note: Optional[str] = None
     discount_percent: Optional[float] = None
@@ -202,6 +235,19 @@ def admin_summary(user: user_dependency, db: db_dependency):
     }
 
 
+@router.get("/debug/products-model")
+def admin_debug_products_model(user: user_dependency):
+    require_admin(user)
+    cols = sorted(model_column_names(Products))
+    return {
+        "products_model_columns": cols,
+        "has_brand": "brand" in cols,
+        "has_flyer_valid_from": "flyer_valid_from" in cols,
+        "has_location": "location" in cols,
+        "has_aisle_order": "aisle_order" in cols,
+    }
+
+
 @router.get("/products")
 def admin_list_products(
     user: user_dependency,
@@ -223,9 +269,20 @@ def admin_list_products(
 @router.post("/products", status_code=status.HTTP_201_CREATED)
 def admin_create_product(user: user_dependency, db: db_dependency, request: AdminProductIn):
     require_admin(user)
+
     if not db.query(Supermarkets).filter(Supermarkets.id == request.supermarket_id).first():
         raise HTTPException(status_code=404, detail="Supermarket not found")
-    product = Products(**request.model_dump())
+
+    data = request.model_dump()
+    known_data = safe_model_data(Products, data)
+
+    if "name" not in known_data or "original_price" not in known_data or "supermarket_id" not in known_data:
+        raise HTTPException(
+            status_code=400,
+            detail="Products model is missing required columns. Deploy the v16 models.py patch, then restart Render.",
+        )
+
+    product = Products(**known_data)
     db.add(product)
     db.commit()
     db.refresh(product)
@@ -238,9 +295,7 @@ def admin_update_product(user: user_dependency, db: db_dependency, request: Admi
     product = db.query(Products).filter(Products.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    data = request.model_dump(exclude_unset=True)
-    for key, value in data.items():
-        setattr(product, key, value)
+    assign_known_fields(product, request.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(product)
     return serialize_product(product)
@@ -252,7 +307,6 @@ def admin_delete_product(user: user_dependency, db: db_dependency, product_id: i
     product = db.query(Products).filter(Products.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-
     db.query(Cart).filter(Cart.product_id == product_id).delete(synchronize_session=False)
     db.query(Favorites).filter(Favorites.product_id == product_id).delete(synchronize_session=False)
     db.query(RecipeItems).filter(RecipeItems.product_id == product_id).delete(synchronize_session=False)
@@ -270,7 +324,7 @@ def admin_list_supermarkets(user: user_dependency, db: db_dependency):
 @router.post("/supermarkets", status_code=status.HTTP_201_CREATED)
 def admin_create_supermarket(user: user_dependency, db: db_dependency, request: AdminSupermarketIn):
     require_admin(user)
-    sm = Supermarkets(**request.model_dump())
+    sm = Supermarkets(**safe_model_data(Supermarkets, request.model_dump()))
     db.add(sm)
     db.commit()
     db.refresh(sm)
@@ -283,8 +337,7 @@ def admin_update_supermarket(user: user_dependency, db: db_dependency, request: 
     sm = db.query(Supermarkets).filter(Supermarkets.id == supermarket_id).first()
     if not sm:
         raise HTTPException(status_code=404, detail="Supermarket not found")
-    for key, value in request.model_dump(exclude_unset=True).items():
-        setattr(sm, key, value)
+    assign_known_fields(sm, request.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(sm)
     return serialize_supermarket(sm)
@@ -301,7 +354,10 @@ def admin_delete_supermarket(user: user_dependency, db: db_dependency, supermark
         raise HTTPException(status_code=400, detail=f"Supermarket has {products_count} products. Use force=true or delete/move products first.")
     if force:
         for product in db.query(Products).filter(Products.supermarket_id == supermarket_id).all():
-            admin_delete_product(user, db, product.id)
+            db.query(Cart).filter(Cart.product_id == product.id).delete(synchronize_session=False)
+            db.query(Favorites).filter(Favorites.product_id == product.id).delete(synchronize_session=False)
+            db.query(RecipeItems).filter(RecipeItems.product_id == product.id).delete(synchronize_session=False)
+            db.delete(product)
     db.delete(sm)
     db.commit()
 
@@ -321,8 +377,7 @@ def admin_update_user(user: user_dependency, db: db_dependency, request: AdminUs
     target = db.query(Users).filter(Users.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    for key, value in request.model_dump(exclude_unset=True).items():
-        setattr(target, key, value)
+    assign_known_fields(target, request.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(target)
     return serialize_user(target)
@@ -342,11 +397,8 @@ def admin_create_recipe(user: user_dependency, db: db_dependency, request: Admin
     require_admin(user)
     if not db.query(Users).filter(Users.id == request.owner_id).first():
         raise HTTPException(status_code=404, detail="Owner user not found")
-    recipe = Recipes(name=request.name, image=request.image, owner_id=request.owner_id)
-    for field in ["description", "servings", "prep_time_minutes", "instructions"]:
-        if hasattr(recipe, field):
-            setattr(recipe, field, getattr(request, field))
-    if hasattr(recipe, "source_type"):
+    recipe = Recipes(**safe_model_data(Recipes, request.model_dump()))
+    if hasattr(recipe, "source_type") and not getattr(recipe, "source_type", None):
         recipe.source_type = "admin"
     db.add(recipe)
     db.commit()
@@ -363,9 +415,7 @@ def admin_update_recipe(user: user_dependency, db: db_dependency, request: Admin
     data = request.model_dump(exclude_unset=True)
     if data.get("owner_id") and not db.query(Users).filter(Users.id == data["owner_id"]).first():
         raise HTTPException(status_code=404, detail="Owner user not found")
-    for key, value in data.items():
-        if hasattr(recipe, key):
-            setattr(recipe, key, value)
+    assign_known_fields(recipe, data)
     db.commit()
     db.refresh(recipe)
     return serialize_recipe(db, recipe)

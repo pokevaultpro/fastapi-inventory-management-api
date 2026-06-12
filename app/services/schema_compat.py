@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from sqlalchemy import inspect, text
-from sqlalchemy.engine import Engine
 
 
 PRODUCT_METADATA_COLUMNS = {
@@ -17,7 +16,7 @@ PRODUCT_METADATA_COLUMNS = {
     "discount_percent": "FLOAT",
 }
 
-RECIPE_METADATA_COLUMNS = {
+RECIPE_COLUMNS = {
     "description": "TEXT",
     "servings": "INTEGER DEFAULT 1",
     "prep_time_minutes": "INTEGER",
@@ -28,7 +27,7 @@ RECIPE_METADATA_COLUMNS = {
     "created_at": "VARCHAR(40)",
 }
 
-RECIPE_ITEM_METADATA_COLUMNS = {
+RECIPE_ITEM_COLUMNS = {
     "amount": "FLOAT",
     "amount_unit": "VARCHAR(40)",
     "note": "TEXT",
@@ -38,29 +37,29 @@ RECIPE_ITEM_METADATA_COLUMNS = {
 }
 
 
-def _add_missing_columns(engine: Engine, table_name: str, wanted: dict[str, str]) -> None:
+def add_missing_columns(engine, table_name: str, columns: dict[str, str]) -> None:
     inspector = inspect(engine)
-    if table_name not in set(inspector.get_table_names()):
+    table_names = set(inspector.get_table_names())
+
+    if table_name not in table_names:
         return
-    existing = {column["name"] for column in inspector.get_columns(table_name)}
-    missing = [name for name in wanted if name not in existing]
+
+    existing = {col["name"] for col in inspector.get_columns(table_name)}
+    missing = [(name, ddl) for name, ddl in columns.items() if name not in existing]
+
     if not missing:
         return
+
     with engine.begin() as connection:
-        for column_name in missing:
-            connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {wanted[column_name]}"))
+        for name, ddl in missing:
+            connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {name} {ddl}"))
 
 
-def ensure_product_metadata_columns(engine: Engine) -> None:
-    _add_missing_columns(engine, "products", PRODUCT_METADATA_COLUMNS)
+def ensure_product_metadata_columns(engine) -> None:
+    add_missing_columns(engine, "products", PRODUCT_METADATA_COLUMNS)
 
 
-def ensure_recipe_metadata_columns(engine: Engine) -> None:
-    _add_missing_columns(engine, "recipes", RECIPE_METADATA_COLUMNS)
-    _add_missing_columns(engine, "recipe_items", RECIPE_ITEM_METADATA_COLUMNS)
-
-
-def ensure_schema_compat(engine: Engine) -> None:
-    """Small non-destructive migrations for older local/Render databases."""
-    ensure_product_metadata_columns(engine)
-    ensure_recipe_metadata_columns(engine)
+def ensure_schema_compat(engine) -> None:
+    add_missing_columns(engine, "products", PRODUCT_METADATA_COLUMNS)
+    add_missing_columns(engine, "recipes", RECIPE_COLUMNS)
+    add_missing_columns(engine, "recipe_items", RECIPE_ITEM_COLUMNS)
