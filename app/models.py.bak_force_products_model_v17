@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -35,18 +35,9 @@ class Products(Base):
     carbs = Column(Float, nullable=True)
     protein = Column(Float, nullable=True)
     location = Column(String, nullable=True)
-    brand = Column(String, nullable=True)
-    flyer_page = Column(Integer, nullable=True)
-    flyer_valid_from = Column(String, nullable=True)
-    flyer_valid_to = Column(String, nullable=True)
-    flyer_source = Column(String, nullable=True)
-    flyer_source_url = Column(Text, nullable=True)
-    is_lidl_plus = Column(Boolean, default=False)
-    flyer_imported_at = Column(String, nullable=True)
-    offer_note = Column(Text, nullable=True)
-    discount_percent = Column(Float, nullable=True)
     supermarket = relationship("Supermarkets", back_populates="products")
     cart_items = relationship("Cart", back_populates="product")
+
 class Favorites(Base):
     __tablename__ = 'favorites'
 
