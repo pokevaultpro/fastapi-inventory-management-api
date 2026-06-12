@@ -3,6 +3,31 @@ import CONFIG from "./config.js";
 const token = localStorage.getItem("token");
 if (!token) window.location.href = "index.html";
 
+async function apiRequest(url, options = {}) {
+  const currentToken = localStorage.getItem("token");
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+    "Authorization": `Bearer ${currentToken}`
+  };
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    localStorage.removeItem("token");
+    window.location.href = "index.html";
+    return null;
+  }
+  return res;
+}
+
+async function errorMessage(res, fallback) {
+  try {
+    const data = await res.json();
+    return data?.detail || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 const euro = (v) => Number(v || 0).toLocaleString("it-IT", { style: "currency", currency: "EUR" });
 const dateFmt = (v) => v ? new Date(v).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
 
@@ -14,8 +39,8 @@ function toast(message) {
 }
 
 async function loadProfile() {
-  const res = await apiFetch(`${CONFIG.API_BASE_URL}/profile/summary`);
-  if (!res?.ok) return toast("Non riesco a caricare il profilo");
+  const res = await apiRequest(`${CONFIG.API_BASE_URL}/profile/summary`);
+  if (!res?.ok) return toast("Non riesco a caricare il profilo: controlla login/backend");
   const data = await res.json();
   renderProfile(data);
 }
@@ -58,7 +83,7 @@ document.getElementById("profile-form").addEventListener("submit", async (e) => 
     last_name: document.getElementById("last-name").value.trim(),
     username: document.getElementById("username").value.trim(),
   };
-  const res = await apiFetch(`${CONFIG.API_BASE_URL}/profile`, { method: "PUT", body: JSON.stringify(payload) });
+  const res = await apiRequest(`${CONFIG.API_BASE_URL}/profile`, { method: "PUT", body: JSON.stringify(payload) });
   if (!res?.ok) return toast("Errore salvataggio profilo");
   toast("Profilo aggiornato");
   loadProfile();

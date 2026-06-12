@@ -3,6 +3,31 @@ import CONFIG from "./config.js";
 const token = localStorage.getItem("token");
 if (!token) window.location.href = "index.html";
 
+async function apiRequest(url, options = {}) {
+  const currentToken = localStorage.getItem("token");
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+    "Authorization": `Bearer ${currentToken}`
+  };
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    localStorage.removeItem("token");
+    window.location.href = "index.html";
+    return null;
+  }
+  return res;
+}
+
+async function errorMessage(res, fallback) {
+  try {
+    const data = await res.json();
+    return data?.detail || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 let products = [];
 let supermarkets = [];
 let recipes = [];
@@ -22,9 +47,9 @@ function toast(message) {
 
 async function loadAll() {
   const [productsRes, supermarketsRes, recipesRes] = await Promise.all([
-    apiFetch(`${CONFIG.API_BASE_URL}/product`),
-    apiFetch(`${CONFIG.API_BASE_URL}/supermarket`),
-    apiFetch(`${CONFIG.API_BASE_URL}/smart-recipes`),
+    apiRequest(`${CONFIG.API_BASE_URL}/product`),
+    apiRequest(`${CONFIG.API_BASE_URL}/supermarket`),
+    apiRequest(`${CONFIG.API_BASE_URL}/smart-recipes`),
   ]);
   products = productsRes?.ok ? await productsRes.json() : [];
   supermarkets = supermarketsRes?.ok ? await supermarketsRes.json() : [];
@@ -66,7 +91,7 @@ function renderRecipes() {
 async function renderDaily() {
   const card = document.getElementById("daily-card");
   card.innerHTML = `<div class="skeleton"></div>`;
-  const res = await apiFetch(`${CONFIG.API_BASE_URL}/smart-recipes/daily/today`);
+  const res = await apiRequest(`${CONFIG.API_BASE_URL}/smart-recipes/daily/today`);
   if (!res?.ok) {
     card.innerHTML = `<h3>Ricetta del giorno</h3><p>Non riesco a caricarla ora.</p>`;
     return;
@@ -75,7 +100,7 @@ async function renderDaily() {
   card.innerHTML = `
     <img src="${img(d.image)}" onerror="this.style.display='none'">
     <h3>${d.name}</h3>
-    <p>${d.description || "Ricetta online abbinata al tuo catalogo prodotti."}</p>
+    <p>${d.description || "Ricetta italiana locale abbinata al tuo catalogo prodotti."}</p>
     <div class="daily-meta">
       <span class="chip green">${euro(d.estimated_total)} stimati</span>
       <span class="chip orange">${d.matched_items.length} prodotti trovati</span>
@@ -87,7 +112,7 @@ async function renderDaily() {
     </div>
   `;
   document.getElementById("add-daily").addEventListener("click", async () => {
-    const addRes = await apiFetch(`${CONFIG.API_BASE_URL}/smart-recipes/daily/add-to-cart`, { method: "POST", body: "{}" });
+    const addRes = await apiRequest(`${CONFIG.API_BASE_URL}/smart-recipes/daily/add-to-cart`, { method: "POST", body: "{}" });
     if (!addRes?.ok) return toast("Non riesco ad aggiungere la ricetta del giorno");
     const out = await addRes.json();
     toast(`${out.added_count} prodotti aggiunti alla lista`);
@@ -175,15 +200,15 @@ async function submitRecipe(e) {
     instructions: document.getElementById("recipe-instructions").value.trim() || null,
     items: selectedIngredients.map(i => ({ product_id: i.product_id, quantity: 1, cart_quantity: Number(i.cart_quantity || 1), amount: i.amount, amount_unit: i.amount_unit || null, note: i.note || null, is_optional: Boolean(i.is_optional) }))
   };
-  const res = await apiFetch(`${CONFIG.API_BASE_URL}/smart-recipes`, { method: "POST", body: JSON.stringify(payload) });
-  if (!res?.ok) return toast("Errore salvataggio ricetta");
+  const res = await apiRequest(`${CONFIG.API_BASE_URL}/smart-recipes`, { method: "POST", body: JSON.stringify(payload) });
+  if (!res?.ok) return toast("Errore salvataggio ricetta: controlla ingredienti e backend");
   closeBuilder();
   toast("Ricetta salvata");
   await loadAll();
 }
 
 async function openDetail(id) {
-  const res = await apiFetch(`${CONFIG.API_BASE_URL}/smart-recipes/${id}`);
+  const res = await apiRequest(`${CONFIG.API_BASE_URL}/smart-recipes/${id}`);
   if (!res?.ok) return toast("Ricetta non trovata");
   const r = await res.json();
   activeRecipe = r;
@@ -220,7 +245,7 @@ async function addSelectedRecipeToCart() {
     const qty = Number(document.querySelector(`input[data-qty="${it.id}"]`)?.value || 1);
     return { recipe_item_id: it.id, quantity: qty, excluded: !checked };
   });
-  const res = await apiFetch(`${CONFIG.API_BASE_URL}/smart-recipes/${activeRecipe.id}/add-to-cart`, { method: "POST", body: JSON.stringify({ items, replace_cart: false }) });
+  const res = await apiRequest(`${CONFIG.API_BASE_URL}/smart-recipes/${activeRecipe.id}/add-to-cart`, { method: "POST", body: JSON.stringify({ items, replace_cart: false }) });
   if (!res?.ok) return toast("Non riesco ad aggiungere la ricetta");
   const out = await res.json();
   document.getElementById("recipe-detail").classList.add("hidden");

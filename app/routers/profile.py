@@ -9,14 +9,25 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette import status
 
-from app.database import SessionLocal
+from app.database import SessionLocal, engine
 from app.models import Cart, Favorites, Products, RecipeItems, Recipes, ShoppingHistory, ShoppingHistoryItem, Users
 from app.routers.auth import get_current_user
+from app.services.schema_compat import ensure_schema_compat
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
+_schema_checked = False
+
+
+def ensure_schema_ready() -> None:
+    global _schema_checked
+    if not _schema_checked:
+        ensure_schema_compat(engine)
+        _schema_checked = True
+
 
 def get_db():
+    ensure_schema_ready()
     db = SessionLocal()
     try:
         yield db
@@ -34,20 +45,31 @@ class ProfileUpdate(BaseModel):
     username: Optional[str] = Field(default=None, max_length=80)
 
 
-def _current_price(product: Products) -> float:
-    discounted = product.discounted_price
-    original = product.original_price or 0
+def _parse_date(value: object) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")[:10])
+    except Exception:
+        return None
+
+
+def _offer_is_active(product: Products) -> bool:
     valid_to = getattr(product, "flyer_valid_to", None)
-    if valid_to:
-        try:
-            end = datetime.fromisoformat(str(valid_to)[:10]).date()
-            if end < datetime.utcnow().date():
-                return float(original)
-        except ValueError:
-            pass
-    if discounted is not None and discounted < original:
+    end = _parse_date(valid_to)
+    if end is None:
+        return True
+    return end.date() >= datetime.utcnow().date()
+
+
+def _current_price(product: Products | None) -> float:
+    if product is None:
+        return 0.0
+    original = float(product.original_price or 0)
+    discounted = product.discounted_price
+    if discounted is not None and float(discounted) < original and _offer_is_active(product):
         return float(discounted)
-    return float(original)
+    return original
 
 
 def _history_stats(db: Session, user_id: int) -> dict:
@@ -86,12 +108,12 @@ def get_profile_summary(user: user_dependency, db: db_dependency):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     cart_items = db.query(Cart).filter(Cart.owner_id == user_id).all()
-    cart_total = sum(_current_price(item.product) * item.quantity for item in cart_items if item.product)
+    cart_total = sum(_current_price(item.product) * int(item.quantity or 1) for item in cart_items if item.product)
     favorites_count = db.query(Favorites).filter(Favorites.owner_id == user_id).count()
     recipes_count = db.query(Recipes).filter(Recipes.owner_id == user_id).count()
     products_count = db.query(Products).count()
 
-    top_categories = (
+    top_categories_rows = (
         db.query(ShoppingHistoryItem.category, func.sum(ShoppingHistoryItem.quantity).label("qty"))
         .join(ShoppingHistory, ShoppingHistory.id == ShoppingHistoryItem.history_id)
         .filter(ShoppingHistory.user_id == user_id)
@@ -113,7 +135,7 @@ def get_profile_summary(user: user_dependency, db: db_dependency):
         },
         "cart": {
             "items_count": len(cart_items),
-            "total_quantity": sum(item.quantity for item in cart_items),
+            "total_quantity": sum(int(item.quantity or 1) for item in cart_items),
             "estimated_total": round(cart_total, 2),
         },
         "library": {
@@ -124,7 +146,7 @@ def get_profile_summary(user: user_dependency, db: db_dependency):
         "history": _history_stats(db, user_id),
         "top_categories": [
             {"category": category or "Altro", "quantity": int(qty or 0)}
-            for category, qty in top_categories
+            for category, qty in top_categories_rows
         ],
     }
 
@@ -136,16 +158,17 @@ def update_profile(user: user_dependency, db: db_dependency, request: ProfileUpd
     if not user_model:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    if request.username and request.username != user_model.username:
-        existing = db.query(Users).filter(Users.username == request.username).first()
+    new_username = (request.username or "").strip()
+    if new_username and new_username != user_model.username:
+        existing = db.query(Users).filter(Users.username == new_username).first()
         if existing:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
-        user_model.username = request.username
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username già esistente")
+        user_model.username = new_username
 
     if request.first_name is not None:
-        user_model.first_name = request.first_name
+        user_model.first_name = request.first_name.strip()
     if request.last_name is not None:
-        user_model.last_name = request.last_name
+        user_model.last_name = request.last_name.strip()
 
     db.commit()
     db.refresh(user_model)

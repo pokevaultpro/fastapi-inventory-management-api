@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import json
 import re
-import urllib.parse
-import urllib.request
 from datetime import datetime
 from typing import Annotated, Any, Optional
 
@@ -13,14 +10,25 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from starlette import status
 
-from app.database import SessionLocal
+from app.database import SessionLocal, engine
 from app.models import Cart, Products, RecipeItems, Recipes, Supermarkets
 from app.routers.auth import get_current_user
+from app.services.schema_compat import ensure_schema_compat
 
 router = APIRouter(prefix="/smart-recipes", tags=["smart-recipes"])
 
+_schema_checked = False
+
+
+def ensure_schema_ready() -> None:
+    global _schema_checked
+    if not _schema_checked:
+        ensure_schema_compat(engine)
+        _schema_checked = True
+
 
 def get_db():
+    ensure_schema_ready()
     db = SessionLocal()
     try:
         yield db
@@ -34,7 +42,7 @@ user_dependency = Annotated[dict, Depends(get_current_user)]
 
 class RecipeIngredientIn(BaseModel):
     product_id: int = Field(gt=0)
-    quantity: int = Field(default=1, gt=0, description="How many catalog units to add to cart")
+    quantity: int = Field(default=1, gt=0)
     cart_quantity: int = Field(default=1, gt=0)
     amount: Optional[float] = Field(default=None, gt=0)
     amount_unit: Optional[str] = Field(default=None, max_length=40)
@@ -67,21 +75,105 @@ class AddRecipeToCartRequest(BaseModel):
     replace_cart: bool = False
 
 
-ITALIAN_INGREDIENT_ALIASES = {
-    "egg": "uova", "eggs": "uova", "milk": "latte", "butter": "burro", "flour": "farina",
-    "sugar": "zucchero", "salt": "sale", "pepper": "pepe", "olive oil": "olio",
-    "oil": "olio", "tomato": "pomodoro", "tomatoes": "pomodori", "chicken": "pollo",
-    "beef": "manzo", "pork": "suino", "rice": "riso", "pasta": "pasta", "onion": "cipolla",
-    "garlic": "aglio", "cheese": "formaggio", "parmesan": "parmigiano", "mozzarella": "mozzarella",
-    "potato": "patate", "potatoes": "patate", "carrot": "carote", "carrots": "carote",
-    "zucchini": "zucchine", "aubergine": "melanzane", "eggplant": "melanzane", "lemon": "limone",
-    "cream": "panna", "yogurt": "yogurt", "tuna": "tonno", "salmon": "salmone",
-}
-
-
-DAILY_SEARCH_NAMES = [
-    "Arrabiata", "Carbonara", "Chicken", "Risotto", "Pasta", "Salmon", "Beef", "Vegetarian", "Soup", "Pizza",
+ITALIAN_DAILY_RECIPES = [
+    {
+        "name": "Pasta al pomodoro e ricotta",
+        "image": "",
+        "description": "Ricetta italiana semplice, economica e veloce. La ricetta del giorno è generata localmente, senza siti esterni.",
+        "instructions": "Cuoci la pasta, scalda il pomodoro, aggiungi ricotta o formaggio a fine cottura e condisci con olio.",
+        "servings": 2,
+        "ingredients": [
+            {"name": "pasta", "measure": "200 g"},
+            {"name": "pomodoro", "measure": "200 g"},
+            {"name": "ricotta", "measure": "150 g"},
+            {"name": "olio", "measure": "q.b."},
+        ],
+    },
+    {
+        "name": "Insalata di pollo estiva",
+        "image": "",
+        "description": "Piatto freddo utile per preparare una spesa leggera con prodotti da banco e verdure.",
+        "instructions": "Cuoci il pollo, taglialo a strisce e uniscilo a insalata, carote e pomodori. Condisci a piacere.",
+        "servings": 2,
+        "ingredients": [
+            {"name": "pollo", "measure": "350 g"},
+            {"name": "insalata", "measure": "1 busta"},
+            {"name": "carote", "measure": "2"},
+            {"name": "pomodori", "measure": "200 g"},
+        ],
+    },
+    {
+        "name": "Cous cous con verdure",
+        "image": "",
+        "description": "Ricetta pratica per usare verdure in offerta e creare una lista della spesa veloce.",
+        "instructions": "Prepara il cous cous, salta zucchine, melanzane e pomodori, poi mescola tutto con olio e spezie.",
+        "servings": 2,
+        "ingredients": [
+            {"name": "cous cous", "measure": "200 g"},
+            {"name": "zucchine", "measure": "250 g"},
+            {"name": "melanzane", "measure": "250 g"},
+            {"name": "pomodori", "measure": "200 g"},
+        ],
+    },
+    {
+        "name": "Riso con tonno e carote",
+        "image": "",
+        "description": "Ricetta semplice da schiscetta, con ingredienti facili da trovare nel catalogo.",
+        "instructions": "Cuoci il riso, scolalo e aggiungi tonno, carote tagliate fini e olio.",
+        "servings": 2,
+        "ingredients": [
+            {"name": "riso", "measure": "200 g"},
+            {"name": "tonno", "measure": "160 g"},
+            {"name": "carote", "measure": "2"},
+            {"name": "olio", "measure": "q.b."},
+        ],
+    },
+    {
+        "name": "Toast tacchino e formaggio",
+        "image": "",
+        "description": "Ricetta rapida per creare subito una lista colazione/pranzo con prodotti reali del catalogo.",
+        "instructions": "Componi il toast con pane, fesa di tacchino e formaggio. Scalda in padella o tostiera.",
+        "servings": 2,
+        "ingredients": [
+            {"name": "pane", "measure": "4 fette"},
+            {"name": "tacchino", "measure": "150 g"},
+            {"name": "formaggio", "measure": "100 g"},
+        ],
+    },
+    {
+        "name": "Uova con patate e insalata",
+        "image": "",
+        "description": "Ricetta economica e completa basata su prodotti comuni del supermercato.",
+        "instructions": "Cuoci le patate, prepara le uova e servi con insalata o verdure fresche.",
+        "servings": 2,
+        "ingredients": [
+            {"name": "uova", "measure": "4"},
+            {"name": "patate", "measure": "500 g"},
+            {"name": "insalata", "measure": "1 busta"},
+        ],
+    },
 ]
+
+INGREDIENT_ALIASES = {
+    "pomodoro": ["pomodoro", "pomodori", "passata", "salsa pomodoro"],
+    "pomodori": ["pomodoro", "pomodori", "datterino", "cuori di bue"],
+    "pollo": ["pollo", "sovracosce", "fusi", "burger di pollo"],
+    "tacchino": ["tacchino", "fesa di tacchino", "hamburger di tacchino"],
+    "formaggio": ["formaggio", "caciotta", "provolone", "tomino", "mozzarella"],
+    "pane": ["pane", "pan bauletto", "toast"],
+    "insalata": ["insalata", "valeriana", "iceberg"],
+    "olio": ["olio", "extra vergine", "olio evo"],
+    "tonno": ["tonno", "rio mare"],
+    "pasta": ["pasta", "fregola", "culurgiones"],
+    "cous cous": ["cous cous", "couscous"],
+    "riso": ["riso", "arancini"],
+    "uova": ["uova", "uovo"],
+    "patate": ["patate", "potatoes"],
+    "carote": ["carote", "carota"],
+    "zucchine": ["zucchine", "zucchina"],
+    "melanzane": ["melanzane", "melanzana"],
+    "ricotta": ["ricotta"],
+}
 
 
 def _set_if_has(model: Any, field: str, value: Any) -> None:
@@ -89,12 +181,12 @@ def _set_if_has(model: Any, field: str, value: Any) -> None:
         setattr(model, field, value)
 
 
-def _parse_date(value: str | None) -> datetime | None:
+def _parse_date(value: object) -> datetime | None:
     if not value:
         return None
     try:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00")[:10])
-    except ValueError:
+    except Exception:
         return None
 
 
@@ -106,10 +198,12 @@ def _offer_is_active(product: Products) -> bool:
     return end.date() >= datetime.utcnow().date()
 
 
-def current_price(product: Products) -> float:
+def current_price(product: Products | None) -> float:
+    if product is None:
+        return 0.0
     original = float(product.original_price or 0)
     discounted = product.discounted_price
-    if discounted is not None and discounted < original and _offer_is_active(product):
+    if discounted is not None and float(discounted) < original and _offer_is_active(product):
         return float(discounted)
     return original
 
@@ -140,9 +234,33 @@ def serialize_product_min(db: Session, product: Products | None) -> dict | None:
     }
 
 
+def normalize_tokens(text: str) -> set[str]:
+    text = re.sub(r"[^a-zA-ZÀ-ÿ0-9]+", " ", str(text or "").lower())
+    return {t for t in text.split() if len(t) >= 3}
+
+
+def cheaper_alternatives(db: Session, product: Products | None, limit: int = 3) -> list[dict]:
+    if not product:
+        return []
+    tokens = list(normalize_tokens(product.name))[:4]
+    if not tokens:
+        return []
+    query = db.query(Products).filter(Products.id != product.id)
+    query = query.filter(or_(*[Products.name.ilike(f"%{token}%") for token in tokens]))
+    candidates = query.limit(40).all()
+    current = current_price(product)
+    cheaper = []
+    for candidate in candidates:
+        price = current_price(candidate)
+        if price > 0 and price < current:
+            cheaper.append({"product": serialize_product_min(db, candidate), "saving": round(current - price, 2)})
+    cheaper.sort(key=lambda x: x["saving"], reverse=True)
+    return cheaper[:limit]
+
+
 def serialize_recipe_item(db: Session, item: RecipeItems) -> dict:
     product = db.query(Products).filter(Products.id == item.product_id).first()
-    price = current_price(product) if product else 0
+    price = current_price(product)
     cart_qty = int(getattr(item, "cart_quantity", None) or item.quantity or 1)
     snapshot_price = getattr(item, "snapshot_price", None)
     return {
@@ -166,14 +284,15 @@ def serialize_recipe_item(db: Session, item: RecipeItems) -> dict:
 def serialize_recipe(db: Session, recipe: Recipes, include_items: bool = True) -> dict:
     items = db.query(RecipeItems).filter(RecipeItems.recipe_id == recipe.id).all()
     serialized_items = [serialize_recipe_item(db, item) for item in items] if include_items else []
-    total = sum(item["line_total"] for item in serialized_items)
+    total = sum(float(item["line_total"] or 0) for item in serialized_items)
+    servings = max(int(getattr(recipe, "servings", None) or 1), 1)
     return {
         "id": recipe.id,
         "name": recipe.name,
         "image": recipe.image,
         "owner_id": recipe.owner_id,
         "description": getattr(recipe, "description", None),
-        "servings": getattr(recipe, "servings", None) or 1,
+        "servings": servings,
         "prep_time_minutes": getattr(recipe, "prep_time_minutes", None),
         "instructions": getattr(recipe, "instructions", None),
         "source_type": getattr(recipe, "source_type", None) or "personal",
@@ -181,44 +300,15 @@ def serialize_recipe(db: Session, recipe: Recipes, include_items: bool = True) -
         "created_at": getattr(recipe, "created_at", None),
         "items_count": len(items),
         "estimated_total": round(total, 2),
-        "estimated_per_serving": round(total / max(int(getattr(recipe, "servings", None) or 1), 1), 2),
+        "estimated_per_serving": round(total / servings, 2),
         "items": serialized_items,
     }
-
-
-def normalize_tokens(text: str) -> set[str]:
-    text = re.sub(r"[^a-zA-ZÀ-ÿ0-9]+", " ", text.lower())
-    tokens = {t for t in text.split() if len(t) >= 3}
-    return tokens
-
-
-def cheaper_alternatives(db: Session, product: Products | None, limit: int = 3) -> list[dict]:
-    if not product:
-        return []
-    tokens = list(normalize_tokens(product.name))[:4]
-    if not tokens:
-        return []
-    query = db.query(Products).filter(Products.id != product.id)
-    clauses = [Products.name.ilike(f"%{token}%") for token in tokens]
-    query = query.filter(or_(*clauses))
-    candidates = query.limit(40).all()
-    current = current_price(product)
-    cheaper = []
-    for candidate in candidates:
-        price = current_price(candidate)
-        if price > 0 and price < current:
-            cheaper.append({
-                "product": serialize_product_min(db, candidate),
-                "saving": round(current - price, 2),
-            })
-    cheaper.sort(key=lambda x: x["saving"], reverse=True)
-    return cheaper[:limit]
 
 
 def ensure_owned_recipe(db: Session, recipe_id: int, owner_id: int) -> Recipes:
     recipe = db.query(Recipes).filter(Recipes.id == recipe_id).filter(Recipes.owner_id == owner_id).first()
     if not recipe:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipe not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ricetta non trovata")
     return recipe
 
 
@@ -229,12 +319,8 @@ def create_or_update_items(db: Session, recipe: Recipes, items: list[RecipeIngre
     for data in items:
         product = db.query(Products).filter(Products.id == data.product_id).first()
         if not product:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product not found: {data.product_id}")
-        item = RecipeItems(
-            recipe_id=recipe.id,
-            product_id=product.id,
-            quantity=data.quantity,
-        )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Prodotto non trovato: {data.product_id}")
+        item = RecipeItems(recipe_id=recipe.id, product_id=product.id, quantity=data.quantity)
         _set_if_has(item, "cart_quantity", data.cart_quantity or data.quantity or 1)
         _set_if_has(item, "amount", data.amount)
         _set_if_has(item, "amount_unit", data.amount_unit)
@@ -250,14 +336,10 @@ def list_recipes(user: user_dependency, db: db_dependency):
     return [serialize_recipe(db, recipe, include_items=True) for recipe in recipes]
 
 
-@router.get("/{recipe_id}", status_code=status.HTTP_200_OK)
-def get_recipe(user: user_dependency, db: db_dependency, recipe_id: int = Path(gt=0)):
-    recipe = ensure_owned_recipe(db, recipe_id, user.get("id"))
-    return serialize_recipe(db, recipe, include_items=True)
-
-
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_recipe(user: user_dependency, db: db_dependency, request: RecipeCreate):
+    if not request.items:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aggiungi almeno un ingrediente dal catalogo")
     recipe = Recipes(name=request.name, image=request.image, owner_id=user.get("id"))
     _set_if_has(recipe, "description", request.description)
     _set_if_has(recipe, "servings", request.servings)
@@ -270,6 +352,40 @@ def create_recipe(user: user_dependency, db: db_dependency, request: RecipeCreat
     create_or_update_items(db, recipe, request.items, replace=False)
     db.commit()
     db.refresh(recipe)
+    return serialize_recipe(db, recipe, include_items=True)
+
+
+@router.get("/daily/today", status_code=status.HTTP_200_OK)
+def daily_recipe(user: user_dependency, db: db_dependency):
+    return build_daily_response(db)
+
+
+@router.post("/daily/add-to-cart", status_code=status.HTTP_201_CREATED)
+def add_daily_recipe_to_cart(user: user_dependency, db: db_dependency):
+    daily = build_daily_response(db)
+    owner_id = user.get("id")
+    added = []
+    for match in daily["matched_items"]:
+        product_id = match["product"]["id"]
+        existing = db.query(Cart).filter(Cart.owner_id == owner_id).filter(Cart.product_id == product_id).first()
+        if existing:
+            existing.quantity += 1
+            existing.checked = False
+        else:
+            db.add(Cart(product_id=product_id, quantity=1, owner_id=owner_id, checked=False))
+        added.append(match)
+    db.commit()
+    return {
+        "added_count": len(added),
+        "added": added,
+        "missing_ingredients": daily["missing_ingredients"],
+        "estimated_total": daily["estimated_total"],
+    }
+
+
+@router.get("/{recipe_id}", status_code=status.HTTP_200_OK)
+def get_recipe(user: user_dependency, db: db_dependency, recipe_id: int = Path(gt=0)):
+    recipe = ensure_owned_recipe(db, recipe_id, user.get("id"))
     return serialize_recipe(db, recipe, include_items=True)
 
 
@@ -317,10 +433,7 @@ def add_recipe_to_cart(user: user_dependency, db: db_dependency, recipe_id: int,
     if request.items is not None:
         selected_map = {sel.recipe_item_id: sel for sel in request.items if not sel.excluded}
 
-    added = []
-    changed_prices = []
-    skipped = []
-
+    added, changed_prices, skipped = [], [], []
     for item in items:
         if selected_map is not None and item.id not in selected_map:
             skipped.append(item.id)
@@ -340,142 +453,64 @@ def add_recipe_to_cart(user: user_dependency, db: db_dependency, recipe_id: int,
         snapshot = getattr(item, "snapshot_price", None)
         now = current_price(product)
         if snapshot is not None and round(float(snapshot), 2) != round(float(now), 2):
-            changed_prices.append({
-                "product_id": product.id,
-                "name": product.name,
-                "old_price": snapshot,
-                "current_price": now,
-                "difference": round(now - float(snapshot), 2),
-            })
+            changed_prices.append({"product_id": product.id, "name": product.name, "old_price": snapshot, "current_price": now, "difference": round(now - float(snapshot), 2)})
         added.append({"product_id": product.id, "name": product.name, "quantity": qty, "current_price": now})
 
     db.commit()
-    return {
-        "recipe_id": recipe.id,
-        "added_count": len(added),
-        "added": added,
-        "skipped_recipe_item_ids": skipped,
-        "changed_prices": changed_prices,
-        "message": "Ricetta aggiunta alla lista della spesa",
-    }
-
-
-def _fetch_mealdb_daily() -> dict | None:
-    day_index = int(datetime.utcnow().strftime("%j"))
-    query = DAILY_SEARCH_NAMES[day_index % len(DAILY_SEARCH_NAMES)]
-    url = "https://www.themealdb.com/api/json/v1/1/search.php?s=" + urllib.parse.quote(query)
-    try:
-        with urllib.request.urlopen(url, timeout=6) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        meals = payload.get("meals") or []
-        if not meals:
-            return None
-        meal = meals[day_index % len(meals)]
-        ingredients = []
-        for i in range(1, 21):
-            ingredient = (meal.get(f"strIngredient{i}") or "").strip()
-            measure = (meal.get(f"strMeasure{i}") or "").strip()
-            if ingredient:
-                ingredients.append({"name": ingredient, "measure": measure})
-        return {
-            "name": meal.get("strMeal"),
-            "image": meal.get("strMealThumb"),
-            "description": meal.get("strCategory") or meal.get("strArea") or "Ricetta del giorno",
-            "instructions": meal.get("strInstructions"),
-            "source_url": meal.get("strSource") or meal.get("strYoutube") or "https://www.themealdb.com/",
-            "ingredients": ingredients,
-            "source_type": "internet_themealdb",
-        }
-    except Exception:
-        return None
-
-
-def _fallback_daily() -> dict:
-    return {
-        "name": "Pasta veloce con pomodoro e formaggio",
-        "image": "",
-        "description": "Fallback locale se la ricetta online non risponde.",
-        "instructions": "Cuoci la pasta, scalda il pomodoro, aggiungi formaggio e olio a fine cottura.",
-        "source_url": None,
-        "source_type": "local_fallback",
-        "ingredients": [
-            {"name": "pasta", "measure": "200 g"},
-            {"name": "tomato", "measure": "200 g"},
-            {"name": "cheese", "measure": "q.b."},
-            {"name": "olive oil", "measure": "q.b."},
-        ],
-    }
+    return {"recipe_id": recipe.id, "added_count": len(added), "added": added, "skipped_recipe_item_ids": skipped, "changed_prices": changed_prices, "message": "Ricetta aggiunta alla lista della spesa"}
 
 
 def match_ingredient_to_product(db: Session, ingredient_name: str) -> Products | None:
-    name = ingredient_name.lower().strip()
-    alias = ITALIAN_INGREDIENT_ALIASES.get(name, name)
-    search_terms = [alias, name]
-    for term in search_terms:
+    key = ingredient_name.lower().strip()
+    terms = INGREDIENT_ALIASES.get(key, [key])
+    best: list[Products] = []
+    for term in terms:
         tokens = list(normalize_tokens(term))
         if not tokens:
             continue
         query = db.query(Products)
         for token in tokens[:2]:
             query = query.filter(Products.name.ilike(f"%{token}%"))
-        matches = query.limit(20).all()
-        if matches:
-            matches.sort(key=current_price)
-            return matches[0]
-    return None
+        matches = query.limit(30).all()
+        best.extend(matches)
+    if not best:
+        # fallback: category contains term
+        for term in terms:
+            matches = db.query(Products).filter(Products.category.ilike(f"%{term}%")).limit(20).all()
+            best.extend(matches)
+    if not best:
+        return None
+    unique = {p.id: p for p in best}.values()
+    return sorted(unique, key=lambda p: (current_price(p) <= 0, current_price(p)))[0]
+
+
+def local_daily_recipe() -> dict:
+    day_index = int(datetime.utcnow().strftime("%j"))
+    recipe = dict(ITALIAN_DAILY_RECIPES[day_index % len(ITALIAN_DAILY_RECIPES)])
+    recipe["source_type"] = "local_italian_rotation"
+    recipe["source_url"] = None
+    return recipe
 
 
 def build_daily_response(db: Session) -> dict:
-    recipe = _fetch_mealdb_daily() or _fallback_daily()
-    matched = []
-    missing = []
+    recipe = local_daily_recipe()
+    matched, missing = [], []
     total = 0.0
     for ing in recipe["ingredients"]:
         product = match_ingredient_to_product(db, ing["name"])
         if product:
             price = current_price(product)
             total += price
-            matched.append({
-                "ingredient": ing["name"],
-                "measure": ing.get("measure"),
-                "product": serialize_product_min(db, product),
-                "line_total": round(price, 2),
-            })
+            matched.append({"ingredient": ing["name"], "measure": ing.get("measure"), "product": serialize_product_min(db, product), "line_total": round(price, 2)})
         else:
             missing.append(ing)
+    servings = int(recipe.get("servings") or 2)
     return {
         **recipe,
         "matched_items": matched,
         "missing_ingredients": missing,
         "estimated_total": round(total, 2),
-        "estimated_per_serving": round(total / 2, 2),
-        "servings": 2,
-    }
-
-
-@router.get("/daily/today", status_code=status.HTTP_200_OK)
-def daily_recipe(user: user_dependency, db: db_dependency):
-    return build_daily_response(db)
-
-
-@router.post("/daily/add-to-cart", status_code=status.HTTP_201_CREATED)
-def add_daily_recipe_to_cart(user: user_dependency, db: db_dependency):
-    daily = build_daily_response(db)
-    owner_id = user.get("id")
-    added = []
-    for match in daily["matched_items"]:
-        product_id = match["product"]["id"]
-        existing = db.query(Cart).filter(Cart.owner_id == owner_id).filter(Cart.product_id == product_id).first()
-        if existing:
-            existing.quantity += 1
-            existing.checked = False
-        else:
-            db.add(Cart(product_id=product_id, quantity=1, owner_id=owner_id, checked=False))
-        added.append(match)
-    db.commit()
-    return {
-        "added_count": len(added),
-        "added": added,
-        "missing_ingredients": daily["missing_ingredients"],
-        "estimated_total": daily["estimated_total"],
+        "estimated_per_serving": round(total / max(servings, 1), 2),
+        "servings": servings,
+        "note": "Ricetta del giorno generata localmente: nessun sito esterno usato.",
     }
