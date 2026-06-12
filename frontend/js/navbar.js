@@ -1,16 +1,33 @@
-// Attiva automaticamente il tab corretto e aggiunge il tab Storico sulle pagine vecchie.
+// Navigazione globale SmartGrocery + tab Admin desktop per utenti admin.
+
 window.addEventListener("DOMContentLoaded", () => {
   ensureHistoryNavButton();
+  ensureAdminNavButton();
 
   const current = document.body.dataset.page;
-  const links = document.querySelectorAll(".nav-pill");
-
-  links.forEach(btn => {
-    if (btn.dataset.tab === current) {
-      btn.classList.add("active");
-    }
+  document.querySelectorAll(".nav-pill").forEach(btn => {
+    if (btn.dataset.tab === current) btn.classList.add("active");
   });
 });
+
+function decodeJwtPayload(token) {
+  if (!token || !token.includes(".")) return {};
+  try {
+    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = decodeURIComponent(
+      atob(payload).split("").map(c => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join("")
+    );
+    return JSON.parse(json);
+  } catch {
+    return {};
+  }
+}
+
+function currentUserRole() {
+  const token = localStorage.getItem("token");
+  const payload = decodeJwtPayload(token);
+  return payload.role || payload.user_role || "";
+}
 
 function ensureHistoryNavButton() {
   const nav = document.querySelector(".header-right");
@@ -22,12 +39,25 @@ function ensureHistoryNavButton() {
   btn.textContent = "Storico";
   btn.onclick = () => navigate("history");
 
-  const profile = nav.querySelector('[data-tab="profile"]');
-  if (profile) nav.insertBefore(btn, profile);
+  const recipes = nav.querySelector('[data-tab="recipes"]');
+  if (recipes) nav.insertBefore(btn, recipes);
   else nav.appendChild(btn);
 }
 
-// Navigazione tra pagine
+function ensureAdminNavButton() {
+  const nav = document.querySelector(".header-right");
+  if (!nav || nav.querySelector('[data-tab="admin"]')) return;
+  if (currentUserRole() !== "admin") return;
+
+  const btn = document.createElement("button");
+  btn.className = "nav-pill admin-nav-pill";
+  btn.dataset.tab = "admin";
+  btn.textContent = "Admin";
+  btn.onclick = () => navigate("admin");
+
+  nav.appendChild(btn);
+}
+
 function navigate(tab) {
   if (tab === "home") window.location.href = "dashboard.html";
   if (tab === "list") window.location.href = "shopping-list.html";
@@ -36,4 +66,5 @@ function navigate(tab) {
   if (tab === "recipes") window.location.href = "recipes.html";
   if (tab === "supermarkets") window.location.href = "supermarkets.html";
   if (tab === "profile") window.location.href = "profile.html";
+  if (tab === "admin") window.location.href = "admin.html";
 }

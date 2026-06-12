@@ -75,7 +75,7 @@
       <div class="card-header">
         <div>
           <p class="card-kicker">Restore</p>
-          <h2>Ultime 5 liste</h2>
+          <h2>Ultime 5 liste</h2><button type="button" class="all-lists-btn" id="open-all-lists">Vedi tutte</button>
         </div>
         <label class="clear-toggle">
           <input type="checkbox" id="clear-before-restore">
@@ -120,6 +120,23 @@
 </main>
 
 <div id="restore-toast" class="restore-toast" hidden></div>
+<section class="all-lists-modal" id="all-lists-modal" hidden>
+  <div class="all-lists-panel">
+    <div class="all-lists-head">
+      <div>
+        <p class="card-kicker">Archivio completo</p>
+        <h2>Tutte le liste finalizzate</h2>
+        <p>Puoi vedere i dettagli e ripristinare qualsiasi lista con i prezzi attuali dei prodotti.</p>
+      </div>
+      <button type="button" id="close-all-lists" class="modal-close-btn">×</button>
+    </div>
+    <div class="all-lists-tools">
+      <input id="all-lists-search" placeholder="Cerca per numero lista o data...">
+      <label class="clear-toggle"><input type="checkbox" id="all-clear-before-restore"><span>Sostituisci carrello</span></label>
+    </div>
+    <div id="all-lists-body" class="all-lists-body"></div>
+  </div>
+</section>
 <div id="chart-tooltip" class="chart-tooltip" hidden></div>
 <div id="bottom-bar-container"></div>
 <script>
@@ -135,6 +152,7 @@ fetch("bottom-bar.html")
 </script>
 <script src="js/api.js"></script>
 <script type="module" src="js/history.js"></script>
+<script type="module" src="js/history-all.js"></script>
 <script src="js/navbar.js"></script>
 </body>
 </html>
