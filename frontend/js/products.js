@@ -1,10 +1,17 @@
-    import CONFIG from "./config.js";
-    import { openProductModal } from "./modal-function.js";
+import CONFIG from "./config.js";
+import { openProductModal } from "./modal-function.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
-    await loadProducts();
-    await loadFavorites();
-    updateVisibleRange(true);
+  await Promise.all([
+    loadProducts(),
+    loadFavorites()
+  ]);
+
+  renderProducts();
+
+  if (window.innerWidth < 480) {
+    updateVisibleRange();
+  }
 });
 
 
@@ -12,7 +19,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let supermarkets = [];
     let currentCategory = "all";
     let currentStore = "all";
-let favorites = [];
+    let favorites = [];
     let visibleStart = 0;
     let visibleEnd = 0;
 
@@ -20,6 +27,9 @@ let favorites = [];
     let CARD_HEIGHT_MOBILE = 338; // mobile
     let BUFFER = 10; // quante card extra mostrare
     let filtered = [];
+
+    let currentPage = 1;
+const PAGE_SIZE = 20;
 
 async function toggleFavorite(id) {
   if (favorites.includes(id)) {
@@ -141,14 +151,18 @@ async function loadFavorites() {
 
   // 4. VIRTUAL CONTAINER HEIGHT
   const container = document.getElementById("virtual-container");
-  container.style.height = filtered.length * cardHeight + "px";
 
   // 5. SPAZIO SOPRA PER STICKY
   const sticky = document.querySelector(".sticky-header");
   const stickyHeight = sticky ? sticky.offsetHeight : 0;
   document.getElementById("spacer-top").style.height = stickyHeight + "px";
 
+if (isMobile) {
+  container.style.height = filtered.length * cardHeight + "px";
   updateVisibleRange();
+} else {
+  renderDesktopPaged();
+}
 }
 
 function updateVisibleRange() {
@@ -186,6 +200,91 @@ function renderVirtualProducts() {
 
     grid.appendChild(card);
   });
+}
+
+function renderDesktopPaged() {
+  const grid = document.getElementById("products-grid");
+  grid.innerHTML = "";
+
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+
+  const pageItems = filtered.slice(start, end);
+
+  pageItems.forEach(p => {
+    const card = createProductCard(p);
+    grid.appendChild(card);
+  });
+
+  renderPagination();
+}
+
+function renderPagination() {
+  let pager = document.getElementById("pagination");
+
+  if (!pager) {
+    pager = document.createElement("div");
+    pager.id = "pagination";
+    pager.className = "pagination-bar";
+    document.querySelector(".products-page").appendChild(pager);
+  }
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const windowSize = 5;
+
+  let start = Math.max(1, currentPage - Math.floor(windowSize / 2));
+  let end = start + windowSize - 1;
+
+  if (end > totalPages) {
+    end = totalPages;
+    start = Math.max(1, end - windowSize + 1);
+  }
+
+  pager.innerHTML = "";
+
+  if (currentPage > 1) {
+    pager.appendChild(createPageBtn("←", currentPage - 1));
+  }
+
+  if (start > 1) {
+    pager.appendChild(createPageBtn("1"));
+    if (start > 2) pager.appendChild(dots());
+  }
+
+  for (let i = start; i <= end; i++) {
+    pager.appendChild(createPageBtn(i));
+  }
+
+  if (end < totalPages) {
+    if (end < totalPages - 1) pager.appendChild(dots());
+    pager.appendChild(createPageBtn(totalPages));
+  }
+
+  if (currentPage < totalPages) {
+    pager.appendChild(createPageBtn("→", currentPage + 1));
+  }
+}
+
+function createPageBtn(label, page = label) {
+  const btn = document.createElement("button");
+  btn.textContent = label;
+  btn.className = "page-btn";
+  if (page === currentPage) btn.classList.add("active");
+
+  btn.onclick = () => {
+    currentPage = page;
+    renderDesktopPaged();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  return btn;
+}
+
+function dots() {
+  const span = document.createElement("span");
+  span.textContent = "...";
+  span.className = "dots";
+  return span;
 }
 
 
@@ -342,6 +441,8 @@ function renderVirtualProducts() {
 let ticking = false;
 
 window.addEventListener("scroll", () => {
+  if (window.innerWidth >= 480) return; // DESKTOP: disabilita virtual scroll
+
   if (!ticking) {
     requestAnimationFrame(() => {
       updateVisibleRange();
