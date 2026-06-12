@@ -18,14 +18,14 @@ async function loadDashboard() {
     const [userRes, productsRes, recipesRes, supermarketsRes, statsRes] = await Promise.all([
       apiFetch(`${CONFIG.API_BASE_URL}/user`),
       apiFetch(`${CONFIG.API_BASE_URL}/product`),
-      apiFetch(`${CONFIG.API_BASE_URL}/recipe?owner_id=1`),
+      apiFetch(`${CONFIG.API_BASE_URL}/smart-recipes/daily/today`).catch(() => null),
       apiFetch(`${CONFIG.API_BASE_URL}/supermarket`),
       apiFetch(`${CONFIG.API_BASE_URL}/shopping-history/stats`).catch(() => null),
     ]);
 
     const user = userRes?.ok ? await userRes.json() : { first_name: "" };
     allProducts = productsRes?.ok ? await productsRes.json() : [];
-    const recipes = recipesRes?.ok ? await recipesRes.json() : [];
+    const dailyRecipe = recipesRes?.ok ? await recipesRes.json() : null;
     allSupermarkets = supermarketsRes?.ok ? await supermarketsRes.json() : [];
     const stats = statsRes?.ok ? await statsRes.json() : null;
 
@@ -37,7 +37,7 @@ async function loadDashboard() {
     renderOffers();
     renderDashboardQuickActions();
     renderHistoryMini(stats);
-    renderRecipe(recipes);
+    renderRecipe(dailyRecipe);
   } catch (err) {
     console.error(err);
   }
@@ -133,23 +133,29 @@ function renderHistoryMini(stats) {
   `).join("");
 }
 
-function renderRecipe(recipes) {
+function renderRecipe(daily) {
   const section = document.getElementById("recipe-section");
   const card = document.getElementById("recipe-card");
-  if (!recipes.length) {
-    section.style.display = "block";
-    card.innerHTML = `<div class="empty-mini">Nessuna ricetta ancora. Questa sezione resta pronta per il prossimo step.</div>`;
+  section.style.display = "block";
+  if (!daily) {
+    card.innerHTML = `<div class="empty-mini">Ricetta del giorno non disponibile ora.</div>`;
     return;
   }
-  const r = recipes[0];
   card.innerHTML = `
-    <img src="${r.image || ""}" onerror="this.style.display='none'">
+    ${daily.image ? `<img src="${daily.image}" onerror="this.style.display='none'">` : ""}
     <div class="recipe-overlay">
-      <h3>${r.name}</h3>
-      <p>Idea veloce per trasformare la spesa in pasti concreti. Questa sezione la lasciamo attiva per il prossimo sviluppo ricette.</p>
+      <h3>${daily.name}</h3>
+      <p>${daily.matched_items?.length || 0} prodotti trovati nel catalogo · totale stimato ${euro(daily.estimated_total || 0)}</p>
+      <button class="daily-home-btn" id="home-add-daily">Aggiungi alla lista</button>
     </div>
   `;
+  document.getElementById("home-add-daily")?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const res = await apiFetch(`${CONFIG.API_BASE_URL}/smart-recipes/daily/add-to-cart`, { method: "POST", body: "{}" });
+    if (res?.ok) window.location.href = "shopping-list.html";
+  });
 }
+
 
 window.navigate = function navigate(tab) {
   if (tab === "home") window.location.href = "dashboard.html";

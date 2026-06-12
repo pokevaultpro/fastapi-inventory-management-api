@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartGrocery - Profilo</title>
+  <link rel="stylesheet" href="css/navbar.css">
+  <link rel="stylesheet" href="css/bottom-bar.css">
+  <link rel="stylesheet" href="css/profile.css">
+</head>
+<body data-page="profile">
+<header class="top-header">
+  <div class="header-inner">
+    <div class="header-left">
+      <div class="logo-icon">🛒</div>
+      <span class="header-logo">SmartGrocery</span>
+    </div>
+    <nav class="header-right">
+      <button class="nav-pill" data-tab="home" onclick="navigate('home')">Home</button>
+      <button class="nav-pill" data-tab="list" onclick="navigate('list')">Lista</button>
+      <button class="nav-pill" data-tab="products" onclick="navigate('products')">Prodotti</button>
+      <button class="nav-pill" data-tab="history" onclick="navigate('history')">Storico</button>
+      <button class="nav-pill" data-tab="recipes" onclick="navigate('recipes')">Ricette</button>
+      <button class="nav-pill" data-tab="supermarkets" onclick="navigate('supermarkets')">Negozi</button>
+      <button class="nav-pill" data-tab="profile" onclick="navigate('profile')">Profilo</button>
+    </nav>
+  </div>
+</header>
+
+<main class="profile-page">
+  <section class="profile-hero">
+    <div class="profile-avatar" id="profile-avatar">S</div>
+    <div>
+      <p class="eyebrow">Il tuo spazio</p>
+      <h1 id="profile-title">Profilo</h1>
+      <p id="profile-subtitle">Gestisci account, statistiche e scorciatoie personali.</p>
+    </div>
+    <button class="logout-btn" id="logout-btn">Esci</button>
+  </section>
+
+  <section class="profile-stats-grid">
+    <article class="stat-card primary"><span>Speso totale</span><strong id="stat-total-spent">—</strong><small>storico finalizzato</small></article>
+    <article class="stat-card"><span>Liste</span><strong id="stat-trips">—</strong><small>spese completate</small></article>
+    <article class="stat-card"><span>Carrello</span><strong id="stat-cart">—</strong><small>stima attuale</small></article>
+    <article class="stat-card"><span>Ricette</span><strong id="stat-recipes">—</strong><small>personali</small></article>
+  </section>
+
+  <section class="profile-layout">
+    <article class="panel account-panel">
+      <div class="panel-head">
+        <div><h2>Account</h2><p>Aggiorna i dati visibili nell'app.</p></div>
+      </div>
+      <form id="profile-form" class="profile-form">
+        <label>Nome<input id="first-name" type="text" maxlength="80"></label>
+        <label>Cognome<input id="last-name" type="text" maxlength="80"></label>
+        <label>Username<input id="username" type="text" maxlength="80"></label>
+        <label>Email<input id="email" type="email" disabled></label>
+        <button class="primary-btn" type="submit">Salva modifiche</button>
+      </form>
+    </article>
+
+    <article class="panel quick-panel">
+      <div class="panel-head"><div><h2>Azioni rapide</h2><p>Vai subito alle sezioni più utili.</p></div></div>
+      <div class="profile-actions">
+        <button onclick="navigate('list')">🧾 Lista spesa</button>
+        <button onclick="navigate('history')">📊 Statistiche</button>
+        <button onclick="navigate('recipes')">🍝 Ricette</button>
+        <button onclick="navigate('products')">🏷️ Offerte</button>
+      </div>
+      <div class="mini-categories" id="top-categories"></div>
+    </article>
+  </section>
+
+  <section class="panel recent-panel">
+    <div class="panel-head">
+      <div><h2>Ultime spese</h2><p>Le ultime liste finalizzate nel tuo profilo.</p></div>
+      <button class="ghost-btn" onclick="navigate('history')">Apri storico</button>
+    </div>
+    <div id="latest-trips" class="latest-trips"></div>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+<div id="bottom-bar-container"></div>
+<script>
+fetch("bottom-bar.html").then(r => r.text()).then(html => {
+  document.getElementById("bottom-bar-container").innerHTML = html;
+  const s = document.createElement("script");
+  s.type = "module";
+  s.src = "js/quick-actions.js";
+  document.body.appendChild(s);
+});
+</script>
+<script src="js/api.js"></script>
+<script src="js/navbar.js"></script>
+<script type="module" src="js/profile.js"></script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartGrocery - Ricette</title>
+  <link rel="stylesheet" href="css/navbar.css">
+  <link rel="stylesheet" href="css/bottom-bar.css">
+  <link rel="stylesheet" href="css/recipes.css">
+</head>
+<body data-page="recipes">
+<header class="top-header">
+  <div class="header-inner">
+    <div class="header-left"><div class="logo-icon">🛒</div><span class="header-logo">SmartGrocery</span></div>
+    <nav class="header-right">
+      <button class="nav-pill" data-tab="home" onclick="navigate('home')">Home</button>
+      <button class="nav-pill" data-tab="list" onclick="navigate('list')">Lista</button>
+      <button class="nav-pill" data-tab="products" onclick="navigate('products')">Prodotti</button>
+      <button class="nav-pill" data-tab="history" onclick="navigate('history')">Storico</button>
+      <button class="nav-pill" data-tab="recipes" onclick="navigate('recipes')">Ricette</button>
+      <button class="nav-pill" data-tab="supermarkets" onclick="navigate('supermarkets')">Negozi</button>
+      <button class="nav-pill" data-tab="profile" onclick="navigate('profile')">Profilo</button>
+    </nav>
+  </div>
+</header>
+
+<main class="recipes-page">
+  <section class="recipes-hero">
+    <div>
+      <p class="eyebrow">Meal planning</p>
+      <h1>Ricette intelligenti</h1>
+      <p>Crea ricette personali selezionando prodotti reali del catalogo, controlla il prezzo totale e aggiungi tutto alla lista della spesa in un click.</p>
+      <div class="hero-actions"><button class="primary-btn" id="open-create">+ Nuova ricetta</button><button class="ghost-btn" id="refresh-daily">Aggiorna ricetta del giorno</button></div>
+    </div>
+    <article class="daily-card" id="daily-card"><div class="skeleton"></div></article>
+  </section>
+
+  <section class="recipes-grid-section">
+    <div class="section-head"><div><h2>Le tue ricette</h2><p>Personali per il tuo profilo.</p></div><input id="recipe-search" placeholder="Cerca ricette..."></div>
+    <div id="recipes-grid" class="recipes-grid"></div>
+  </section>
+</main>
+
+<section class="recipe-builder hidden" id="recipe-builder">
+  <div class="builder-card">
+    <button class="close-builder" id="close-builder">×</button>
+    <div class="builder-head"><h2 id="builder-title">Nuova ricetta</h2><p>Seleziona ingredienti dal catalogo prodotti: così la lista della spesa resta precisa.</p></div>
+    <form id="recipe-form" class="recipe-form">
+      <div class="form-grid">
+        <label>Nome ricetta<input id="recipe-name" required minlength="2" placeholder="Es. Pasta fredda proteica"></label>
+        <label>Foto / URL immagine<input id="recipe-image" placeholder="https://... oppure /static/images/..."></label>
+        <label>Porzioni<input id="recipe-servings" type="number" min="1" value="2"></label>
+        <label>Tempo prep. min<input id="recipe-time" type="number" min="0" placeholder="20"></label>
+      </div>
+      <label>Descrizione<textarea id="recipe-description" rows="3" placeholder="Quando la prepari, perché è utile, consigli..."></textarea></label>
+      <label>Istruzioni<textarea id="recipe-instructions" rows="4" placeholder="Passaggi principali"></textarea></label>
+
+      <div class="ingredient-picker">
+        <div class="picker-left">
+          <h3>Aggiungi ingredienti</h3>
+          <input id="product-search" placeholder="Cerca prodotto catalogo: uova, pasta, tonno...">
+          <div id="product-results" class="product-results"></div>
+        </div>
+        <div class="picker-right">
+          <h3>Ingredienti ricetta</h3>
+          <div id="selected-ingredients" class="selected-ingredients"></div>
+          <div class="recipe-total-line">Totale stimato: <strong id="builder-total">0,00 €</strong></div>
+        </div>
+      </div>
+      <button class="primary-btn wide" type="submit">Salva ricetta</button>
+    </form>
+  </div>
+</section>
+
+<section class="recipe-detail hidden" id="recipe-detail">
+  <div class="detail-card">
+    <button class="close-builder" id="close-detail">×</button>
+    <div id="detail-content"></div>
+  </div>
+</section>
+
+<div id="toast" class="toast"></div>
+<div id="bottom-bar-container"></div>
+<script>
+fetch("bottom-bar.html").then(r => r.text()).then(html => {
+  document.getElementById("bottom-bar-container").innerHTML = html;
+  const s = document.createElement("script");
+  s.type = "module";
+  s.src = "js/quick-actions.js";
+  document.body.appendChild(s);
+});
+</script>
+<script src="js/api.js"></script>
+<script src="js/navbar.js"></script>
+<script type="module" src="js/recipes.js"></script>
+</body>
+</html>

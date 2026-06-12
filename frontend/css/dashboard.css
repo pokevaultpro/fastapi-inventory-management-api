@@ -246,3 +246,4 @@ body {
   .recipe-overlay h3 { font-size: 22px; }
   .recipe-overlay p { font-size: 13px; }
 }
+.daily-home-btn{margin-top:10px;border:0;border-radius:14px;background:#16a34a;color:#fff;font-weight:950;padding:10px 13px;cursor:pointer;box-shadow:0 10px 22px rgba(22,163,74,.22)}
