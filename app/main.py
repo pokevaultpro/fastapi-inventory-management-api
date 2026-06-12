@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from app.database import engine, Base
 from app.routers import (auth, products, favorites, supermarkets, recipes, recipe_items,
-                         cart, users, shopping_history, flyer_catalog, profile, recipe_smart, admin, profile_role)
+                         cart, users, shopping_history, flyer_catalog, profile, recipe_smart, admin, profile_role, admin_bootstrap)
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -70,3 +70,4 @@ app.include_router(profile.router)
 app.include_router(recipe_smart.router)
 app.include_router(admin.router)
 app.include_router(profile_role.router)
+app.include_router(admin_bootstrap.router)
