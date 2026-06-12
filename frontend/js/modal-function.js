@@ -9,8 +9,31 @@ function formatDate(value) {
   return date.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+function parseFlyerSourceDates(source) {
+  const text = String(source || "");
+  const match = text.match(/(\d{4})[_-](\d{2})[_-](\d{2}).*?(\d{4})[_-](\d{2})[_-](\d{2})/);
+  if (!match) return { from: null, to: null };
+  return { from: `${match[1]}-${match[2]}-${match[3]}`, to: `${match[4]}-${match[5]}-${match[6]}` };
+}
+
+function flyerDates(item) {
+  const parsed = parseFlyerSourceDates(item.flyer_source || item.offer_note || "");
+  return {
+    from: item.flyer_valid_from || parsed.from,
+    to: item.flyer_valid_to || parsed.to,
+  };
+}
+
+function isOfferActive(item) {
+  const { to } = flyerDates(item);
+  if (!to) return true;
+  const end = new Date(`${to}T23:59:59`);
+  if (Number.isNaN(end.getTime())) return true;
+  return end >= new Date();
+}
+
 function hasDiscount(item) {
-  return Number(item.discounted_price) > 0 && Number(item.discounted_price) < Number(item.original_price);
+  return isOfferActive(item) && Number(item.discounted_price) > 0 && Number(item.discounted_price) < Number(item.original_price);
 }
 
 function discountPercent(item) {
@@ -45,14 +68,15 @@ export function openProductModal(item, supermarket = {}) {
 
   const flyerBox = document.getElementById("modal-flyer-box");
   const page = item.flyer_page || (item.aisle_order && item.aisle_order < 900 ? Math.round(item.aisle_order) : null);
-  const hasFlyerInfo = Boolean(page || item.flyer_valid_from || item.flyer_valid_to || item.is_lidl_plus);
+  const dates = flyerDates(item);
+  const hasFlyerInfo = Boolean(page || dates.from || dates.to || item.is_lidl_plus);
 
   if (hasFlyerInfo) {
     flyerBox.classList.remove("hidden");
     document.getElementById("modal-flyer-page").textContent = page ? `Pagina ${page}` : "Pagina non indicata";
-    const from = formatDate(item.flyer_valid_from);
-    const to = formatDate(item.flyer_valid_to);
-    document.getElementById("modal-flyer-validity").textContent = from && to ? `${from} – ${to}` : to ? `fino al ${to}` : "Non indicata";
+    const from = formatDate(dates.from);
+    const to = formatDate(dates.to);
+    document.getElementById("modal-flyer-validity").textContent = from && to ? `${from} – ${to}` : to ? `fino al ${to}` : "Data del volantino non salvata";
   } else {
     flyerBox.classList.add("hidden");
   }

@@ -5,7 +5,7 @@ if (!token) window.location.href = "index.html";
 
 const state = {
   stats: null,
-  expandedHistoryId: null,
+  chart: { monthlyPoints: [], supermarketSegments: [] },
 };
 
 const colors = ["#22c55e", "#2563eb", "#f97316", "#7c3aed", "#ef4444", "#14b8a6", "#eab308", "#0f172a"];
@@ -26,6 +26,25 @@ function imgSrc(src) {
   return src;
 }
 
+function monthLabel(period) {
+  if (!period || !period.includes("-")) return period || "N/D";
+  const [year, month] = period.split("-");
+  return `${month}/${year.slice(2)}`;
+}
+
+function setCanvasSize(canvas, cssHeight) {
+  const parent = canvas.parentElement;
+  const width = Math.max(320, parent ? parent.clientWidth : canvas.getBoundingClientRect().width || 320);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = "100%";
+  canvas.style.height = `${cssHeight}px`;
+  canvas.width = Math.floor(width * dpr);
+  canvas.height = Math.floor(cssHeight * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, width, height: cssHeight, dpr };
+}
+
 async function loadStats() {
   const range = document.getElementById("range-select").value;
   const qs = range === "all" ? "" : `?days=${range}`;
@@ -42,8 +61,20 @@ async function init() {
 }
 
 function bindEvents() {
-  document.getElementById("refresh-btn").addEventListener("click", refresh);
-  document.getElementById("range-select").addEventListener("change", refresh);
+  document.getElementById("refresh-btn")?.addEventListener("click", refresh);
+  document.getElementById("range-select")?.addEventListener("change", refresh);
+
+  const monthly = document.getElementById("monthly-chart");
+  monthly?.addEventListener("mousemove", (event) => showMonthlyTooltip(event));
+  monthly?.addEventListener("click", (event) => showMonthlyTooltip(event, true));
+  monthly?.addEventListener("mouseleave", hideChartTooltip);
+  monthly?.addEventListener("touchstart", (event) => showMonthlyTooltip(event.touches[0], true), { passive: true });
+
+  const donut = document.getElementById("supermarket-chart");
+  donut?.addEventListener("mousemove", (event) => showSupermarketTooltip(event));
+  donut?.addEventListener("click", (event) => showSupermarketTooltip(event, true));
+  donut?.addEventListener("mouseleave", hideChartTooltip);
+  donut?.addEventListener("touchstart", (event) => showSupermarketTooltip(event.touches[0], true), { passive: true });
 }
 
 async function refresh() {
@@ -52,7 +83,7 @@ async function refresh() {
     renderAll();
   } catch (err) {
     console.error(err);
-    document.querySelector(".history-page").insertAdjacentHTML("beforeend", `<div class="empty-state">Errore caricamento cronologia: ${err.message}</div>`);
+    document.querySelector(".history-page")?.insertAdjacentHTML("beforeend", `<div class="empty-state">Errore caricamento cronologia: ${err.message}</div>`);
   }
 }
 
@@ -66,15 +97,16 @@ function renderAll() {
 }
 
 function renderKpis() {
-  const o = state.stats.overview;
+  const o = state.stats.overview || {};
   const cards = [
-    { label: "Totale speso", value: euro(o.total_spent), sub: `${o.trips_count} liste finalizzate`, accent: "rgba(34,197,94,.18)" },
-    { label: "Prodotti comprati", value: o.total_items, sub: `${euro(o.average_item_price)} medio/prodotto`, accent: "rgba(37,99,235,.16)" },
-    { label: "Media per spesa", value: euro(o.average_trip), sub: "ticket medio", accent: "rgba(249,115,22,.18)" },
-    { label: "Risparmio stimato", value: euro(o.estimated_savings), sub: `${o.discounted_lines} righe scontate`, accent: "rgba(124,58,237,.16)" },
+    { label: "Totale speso", value: euro(o.total_spent), sub: `${o.trips_count || 0} liste finalizzate`, accent: "rgba(34,197,94,.18)", icon: "€" },
+    { label: "Prodotti comprati", value: o.total_items || 0, sub: `${euro(o.average_item_price)} medio/prodotto`, accent: "rgba(37,99,235,.16)", icon: "🛒" },
+    { label: "Media per spesa", value: euro(o.average_trip), sub: "ticket medio", accent: "rgba(249,115,22,.18)", icon: "📈" },
+    { label: "Risparmio stimato", value: euro(o.estimated_savings), sub: `${o.discounted_lines || 0} righe scontate`, accent: "rgba(124,58,237,.16)", icon: "✨" },
   ];
   document.getElementById("kpi-grid").innerHTML = cards.map(c => `
     <article class="kpi-card" style="--accent:${c.accent}">
+      <div class="kpi-icon">${c.icon}</div>
       <div class="kpi-label">${c.label}</div>
       <div class="kpi-value">${c.value}</div>
       <div class="kpi-sub">${c.sub}</div>
@@ -86,6 +118,8 @@ function drawMonthlyChart() {
   const canvas = document.getElementById("monthly-chart");
   const empty = document.getElementById("monthly-empty");
   const data = state.stats.monthly || [];
+  state.chart.monthlyPoints = [];
+
   if (!data.length) {
     canvas.style.display = "none";
     empty.style.display = "block";
@@ -94,56 +128,97 @@ function drawMonthlyChart() {
   canvas.style.display = "block";
   empty.style.display = "none";
 
-  const ctx = canvas.getContext("2d");
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = 220 * dpr;
-  ctx.scale(dpr, dpr);
-
-  const w = rect.width;
-  const h = 220;
-  const pad = { left: 44, right: 18, top: 20, bottom: 34 };
-  const max = Math.max(...data.map(d => d.total), 1);
-  const points = data.map((d, i) => {
-    const x = pad.left + (data.length === 1 ? (w - pad.left - pad.right) / 2 : i * (w - pad.left - pad.right) / (data.length - 1));
-    const y = h - pad.bottom - (d.total / max) * (h - pad.top - pad.bottom);
-    return { x, y, ...d };
-  });
+  const { ctx, width: w, height: h } = setCanvasSize(canvas, window.innerWidth < 720 ? 250 : 300);
+  const pad = { left: 56, right: 26, top: 28, bottom: 48 };
+  const max = Math.max(...data.map(d => Number(d.total || 0)), 1);
+  const minPlot = 4;
+  const plotW = w - pad.left - pad.right;
+  const plotH = h - pad.top - pad.bottom;
+  const barGap = 14;
+  const barW = Math.max(20, Math.min(64, plotW / data.length - barGap));
 
   ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillRect(0, 0, w, h);
+
   ctx.strokeStyle = "#e2e8f0";
   ctx.lineWidth = 1;
-  for (let i = 0; i < 4; i++) {
-    const y = pad.top + i * (h - pad.top - pad.bottom) / 3;
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+  ctx.fillStyle = "#64748b";
+  ctx.font = "800 11px Inter, system-ui";
+  ctx.textAlign = "right";
+
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + i * plotH / 4;
+    const value = max - (i * max / 4);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(w - pad.right, y);
+    ctx.stroke();
+    ctx.fillText(euro(value), pad.left - 10, y + 4);
   }
 
-  const gradient = ctx.createLinearGradient(0, pad.top, 0, h - pad.bottom);
-  gradient.addColorStop(0, "rgba(34,197,94,.28)");
-  gradient.addColorStop(1, "rgba(34,197,94,0)");
-  ctx.beginPath();
-  points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-  ctx.lineTo(points.at(-1).x, h - pad.bottom);
-  ctx.lineTo(points[0].x, h - pad.bottom);
-  ctx.closePath();
-  ctx.fillStyle = gradient;
-  ctx.fill();
-
-  ctx.beginPath();
-  points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-  ctx.strokeStyle = "#16a34a";
-  ctx.lineWidth = 4;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.stroke();
+  const points = data.map((d, i) => {
+    const slot = plotW / data.length;
+    const x = pad.left + slot * i + slot / 2;
+    const barHeight = Math.max(minPlot, (Number(d.total || 0) / max) * plotH);
+    const y = h - pad.bottom - barHeight;
+    return { x, y, barHeight, barW, ...d };
+  });
 
   points.forEach((p) => {
-    ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fillStyle = "#16a34a"; ctx.fill();
-    ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, Math.PI * 2); ctx.strokeStyle = "rgba(22,163,74,.22)"; ctx.lineWidth = 4; ctx.stroke();
-    ctx.fillStyle = "#64748b"; ctx.font = "700 11px Inter"; ctx.textAlign = "center";
-    ctx.fillText(p.period.slice(5) + "/" + p.period.slice(2,4), p.x, h - 10);
+    const x = p.x - barW / 2;
+    const y = h - pad.bottom - p.barHeight;
+    const radius = 10;
+    const grd = ctx.createLinearGradient(0, y, 0, h - pad.bottom);
+    grd.addColorStop(0, "#22c55e");
+    grd.addColorStop(1, "#bbf7d0");
+    ctx.fillStyle = grd;
+    roundRect(ctx, x, y, barW, p.barHeight, radius);
+    ctx.fill();
+
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "900 11px Inter, system-ui";
+    ctx.textAlign = "center";
+    if (p.barHeight > 34) ctx.fillText(euro(p.total), p.x, y + 18);
+
+    ctx.fillStyle = "#64748b";
+    ctx.font = "800 11px Inter, system-ui";
+    ctx.fillText(monthLabel(p.period), p.x, h - 18);
   });
+
+  if (points.length > 1) {
+    ctx.beginPath();
+    points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+  }
+
+  points.forEach((p) => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+    ctx.fillStyle = "white";
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#2563eb";
+    ctx.stroke();
+    p.hitRadius = 18;
+  });
+
+  state.chart.monthlyPoints = points;
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
 }
 
 function renderRecentLists() {
@@ -267,36 +342,47 @@ function drawSupermarketChart() {
   const canvas = document.getElementById("supermarket-chart");
   const legend = document.getElementById("supermarket-legend");
   const data = state.stats.supermarket_breakdown || [];
-  const ctx = canvas.getContext("2d");
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = 220 * dpr;
-  ctx.scale(dpr, dpr);
-  const w = rect.width, h = 220;
-  ctx.clearRect(0,0,w,h);
+  state.chart.supermarketSegments = [];
+
+  const { ctx, width: w, height: h } = setCanvasSize(canvas, window.innerWidth < 720 ? 240 : 280);
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillRect(0, 0, w, h);
 
   if (!data.length) {
     legend.innerHTML = `<div class="empty-state">Nessun supermercato ancora.</div>`;
     return;
   }
 
-  const total = data.reduce((a,b) => a + b.total, 0) || 1;
-  const cx = w / 2, cy = h / 2, radius = Math.min(w,h) * .34;
+  const total = data.reduce((a,b) => a + Number(b.total || 0), 0) || 1;
+  const cx = w / 2;
+  const cy = h / 2;
+  const radius = Math.min(w, h) * .34;
   let start = -Math.PI / 2;
+
   data.forEach((row, idx) => {
-    const angle = (row.total / total) * Math.PI * 2;
+    const angle = (Number(row.total || 0) / total) * Math.PI * 2;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, radius, start, start + angle);
     ctx.closePath();
     ctx.fillStyle = colors[idx % colors.length];
     ctx.fill();
+    state.chart.supermarketSegments.push({ start, end: start + angle, row, color: colors[idx % colors.length], cx, cy, radius });
     start += angle;
   });
-  ctx.beginPath(); ctx.arc(cx, cy, radius * .58, 0, Math.PI * 2); ctx.fillStyle = "white"; ctx.fill();
-  ctx.fillStyle = "#0f172a"; ctx.font = "900 22px Inter"; ctx.textAlign = "center"; ctx.fillText(euro(total), cx, cy + 4);
-  ctx.fillStyle = "#64748b"; ctx.font = "800 11px Inter"; ctx.fillText("totale", cx, cy + 24);
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * .58, 0, Math.PI * 2);
+  ctx.fillStyle = "white";
+  ctx.fill();
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "900 22px Inter, system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText(euro(total), cx, cy + 4);
+  ctx.fillStyle = "#64748b";
+  ctx.font = "800 11px Inter, system-ui";
+  ctx.fillText("totale", cx, cy + 24);
 
   legend.innerHTML = data.map((row, idx) => `
     <span class="legend-pill"><span class="legend-dot" style="background:${colors[idx % colors.length]}"></span>${row.supermarket} · ${euro(row.total)}</span>
@@ -319,6 +405,60 @@ function renderTopProducts() {
       </div>
     </article>
   `).join("");
+}
+
+function showChartTooltip(content, clientX, clientY) {
+  const tooltip = document.getElementById("chart-tooltip");
+  if (!tooltip) return;
+  tooltip.innerHTML = content;
+  tooltip.hidden = false;
+  const pad = 14;
+  const rect = tooltip.getBoundingClientRect();
+  let left = clientX + pad;
+  let top = clientY - rect.height - pad;
+  if (left + rect.width > window.innerWidth - 10) left = clientX - rect.width - pad;
+  if (top < 10) top = clientY + pad;
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function hideChartTooltip() {
+  const tooltip = document.getElementById("chart-tooltip");
+  if (tooltip) tooltip.hidden = true;
+}
+
+function showMonthlyTooltip(event, force = false) {
+  const canvas = document.getElementById("monthly-chart");
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  const hit = state.chart.monthlyPoints.find(p => Math.hypot(p.x - x, p.y - y) <= (force ? 28 : 18) || (Math.abs(p.x - x) <= p.barW / 2 && y >= p.y));
+  if (!hit) {
+    if (!force) hideChartTooltip();
+    return;
+  }
+  showChartTooltip(`<b>${monthLabel(hit.period)}</b><br>${euro(hit.total)}<br>${hit.trips || 0} liste · ${hit.items || 0} prodotti`, event.clientX, event.clientY);
+}
+
+function showSupermarketTooltip(event, force = false) {
+  const canvas = document.getElementById("supermarket-chart");
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  const seg0 = state.chart.supermarketSegments[0];
+  if (!seg0) return;
+  const dx = x - seg0.cx;
+  const dy = y - seg0.cy;
+  const dist = Math.hypot(dx, dy);
+  if (dist > seg0.radius || dist < seg0.radius * .58) {
+    if (!force) hideChartTooltip();
+    return;
+  }
+  let angle = Math.atan2(dy, dx);
+  if (angle < -Math.PI / 2) angle += Math.PI * 2;
+  const hit = state.chart.supermarketSegments.find(s => angle >= s.start && angle <= s.end);
+  if (!hit) return;
+  showChartTooltip(`<b>${hit.row.supermarket}</b><br>${euro(hit.row.total)}<br>${hit.row.quantity || 0} prodotti · ${hit.row.lines || 0} righe`, event.clientX, event.clientY);
 }
 
 window.addEventListener("resize", () => {

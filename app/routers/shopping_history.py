@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta
+import re
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -58,8 +59,37 @@ def _round_money(value: float | int | None) -> float:
     return round(float(value or 0), 2)
 
 
+def _parse_product_date(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")[:10])
+    except ValueError:
+        return None
+
+
+def _parse_source_dates(value: str | None) -> tuple[str | None, str | None]:
+    text = str(value or "")
+    match = re.search(r"(\d{4})[_-](\d{2})[_-](\d{2}).*?(\d{4})[_-](\d{2})[_-](\d{2})", text)
+    if not match:
+        return None, None
+    return f"{match.group(1)}-{match.group(2)}-{match.group(3)}", f"{match.group(4)}-{match.group(5)}-{match.group(6)}"
+
+
+def _product_offer_is_active(product: Products) -> bool:
+    valid_to = getattr(product, "flyer_valid_to", None)
+    if not valid_to:
+        _, valid_to = _parse_source_dates(getattr(product, "flyer_source", None))
+    end = _parse_product_date(valid_to)
+    if end is None:
+        return True
+    return end.date() >= datetime.utcnow().date()
+
+
 def _product_current_price(product: Products) -> float:
-    return float(product.discounted_price if product.discounted_price is not None else product.original_price)
+    if _product_offer_is_active(product) and product.discounted_price is not None:
+        return float(product.discounted_price)
+    return float(product.original_price)
 
 
 def _history_owned_query(db: Session, owner_id: int):

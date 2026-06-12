@@ -2,100 +2,126 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SmartGrocery - Dashboard</title>
-    <link rel="stylesheet" href="css/navbar.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartGrocery - Home</title>
+  <link rel="stylesheet" href="css/navbar.css">
   <link rel="stylesheet" href="css/dashboard.css">
-    <link rel="stylesheet" href="css/modal.css">
+  <link rel="stylesheet" href="css/modal.css">
+  <link rel="stylesheet" href="css/bottom-bar.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body data-page="home">
 <header class="top-header">
   <div class="header-inner">
-
     <div class="header-left">
       <div class="logo-icon">
         <svg class="cart-svg" viewBox="0 0 24 24" fill="none" stroke="white">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M2.5 3h2l1.6 9.5a2 2 0 002 1.7h8.4a2 2 0 001.9-1.4l2.1-6.8H6.1" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.5 3h2l1.6 9.5a2 2 0 002 1.7h8.4a2 2 0 001.9-1.4l2.1-6.8H6.1" />
           <circle cx="9" cy="19" r="1.5" />
           <circle cx="17" cy="19" r="1.5" />
         </svg>
       </div>
       <span class="header-logo">SmartGrocery</span>
     </div>
-
     <nav class="header-right">
       <button class="nav-pill" data-tab="home" onclick="navigate('home')">Home</button>
-      <button class="nav-pill" data-tab="list" onclick="navigate('list')">List</button>
+      <button class="nav-pill" data-tab="list" onclick="navigate('list')">Lista</button>
       <button class="nav-pill" data-tab="products" onclick="navigate('products')">Prodotti</button>
+      <button class="nav-pill" data-tab="history" onclick="navigate('history')">Storico</button>
       <button class="nav-pill" data-tab="recipes" onclick="navigate('recipes')">Ricette</button>
       <button class="nav-pill" data-tab="supermarkets" onclick="navigate('supermarkets')">Negozi</button>
       <button class="nav-pill" data-tab="profile" onclick="navigate('profile')">Profilo</button>
     </nav>
-
   </div>
 </header>
 
-
-
-
-  <div class="dashboard-container">
-
-    <header class="header">
+<main class="home-shell">
+  <section class="home-hero">
+    <div class="hero-copy-block">
+      <p class="eyebrow">Spesa intelligente</p>
+      <h1 id="user-greeting">Ciao 👋</h1>
+      <p class="hero-subtitle">Trova offerte, prepara la lista, controlla lo storico e risparmia senza perderti tra i volantini.</p>
+      <div class="hero-actions">
+        <button class="primary-action" onclick="navigate('products')">Guarda offerte</button>
+        <button class="secondary-action" onclick="navigate('list')">Apri lista</button>
+      </div>
+    </div>
+    <div class="hero-panel-card">
+      <div class="hero-avatar" id="user-avatar">S</div>
       <div>
-        <h1 id="user-greeting" class="header-title"></h1>
-        <p class="header-subtitle">Pronto per la spesa intelligente?</p>
+        <span class="mini-label">Oggi</span>
+        <strong id="hero-best-deal">Carico migliore offerta...</strong>
       </div>
-      <div id="user-avatar" class="avatar"></div>
-    </header>
+    </div>
+  </section>
 
-    <!-- Offerte -->
-    <section class="section">
-      <div class="section-header">
-        <h2 class="section-title"><span class="fire">🔥</span> Offerte del Momento</h2>
-        <button class="see-all-btn" id="see-all-offers">Vedi tutto</button>
-      </div>
+  <section class="home-stats" id="home-stats">
+    <article class="home-stat"><span>Catalogo</span><strong id="stat-products">—</strong><small>prodotti</small></article>
+    <article class="home-stat"><span>Offerte attive</span><strong id="stat-offers">—</strong><small>sconti</small></article>
+    <article class="home-stat"><span>Storico</span><strong id="stat-spent">—</strong><small>totale speso</small></article>
+    <article class="home-stat"><span>Liste</span><strong id="stat-lists">—</strong><small>finalizzate</small></article>
+  </section>
 
-      <div id="offers" class="offers-list"></div>
-    </section>
+  <section class="home-layout">
+    <div class="main-column">
+      <section class="section-card offers-section">
+        <div class="section-header">
+          <div>
+            <p class="section-kicker">Da non perdere</p>
+            <h2>Offerte del momento</h2>
+          </div>
+          <button class="see-all-btn" id="see-all-offers">Vedi tutto</button>
+        </div>
+        <div id="offers" class="offers-list"></div>
+      </section>
 
-    <!-- Accesso Rapido -->
-    <section class="section" id="fast-access">
-      <h2 class="section-title">Accesso Rapido</h2>
-      <div class="quick-actions" id="quick-actions"></div>
-    </section>
+      <section class="section-card" id="recipe-section">
+        <div class="section-header">
+          <div>
+            <p class="section-kicker">Meal ideas</p>
+            <h2>Ricetta del giorno</h2>
+          </div>
+          <button class="link-btn" id="view-recipes">Scopri ricette</button>
+        </div>
+        <div id="recipe-card" class="recipe-card"></div>
+      </section>
+    </div>
 
-    <!-- Ricetta del Giorno -->
-    <section class="section" id="recipe-section">
-      <div class="section-header">
-        <h2 class="section-title">Ricetta del Giorno</h2>
-        <button class="link-btn" id="view-recipes">Scopri ricette</button>
-      </div>
+    <aside class="side-column">
+      <section class="section-card quick-card">
+        <div class="section-header stacked">
+          <p class="section-kicker">Shortcut</p>
+          <h2>Azioni rapide</h2>
+        </div>
+        <div class="quick-actions" id="quick-actions"></div>
+      </section>
 
-      <div id="recipe-card" class="recipe-card"></div>
-    </section>
+      <section class="section-card history-mini-card">
+        <div class="section-header stacked">
+          <p class="section-kicker">Ultima attività</p>
+          <h2>Storico recente</h2>
+        </div>
+        <div id="history-mini" class="history-mini"></div>
+      </section>
+    </aside>
+  </section>
+</main>
 
-  </div>
-
-    <div id="bottom-bar-container"></div>
-    <script>
+<div id="bottom-bar-container"></div>
+<script>
 fetch("bottom-bar.html")
   .then(r => r.text())
   .then(html => {
     document.getElementById("bottom-bar-container").innerHTML = html;
-
     const script = document.createElement("script");
     script.type = "module";
     script.src = "js/quick-actions.js";
     document.body.appendChild(script);
   });
-
-    </script>
-
-
-  <script src="js/api.js"></script>
-  <script type="module" src="js/modal-loader.js"></script>
-  <script type="module" src="js/dashboard.js"></script>
-  <script src="js/navbar.js"></script>
+</script>
+<script src="js/api.js"></script>
+<script type="module" src="js/modal-loader.js"></script>
+<script type="module" src="js/dashboard.js"></script>
+<script src="js/navbar.js"></script>
 </body>
 </html>

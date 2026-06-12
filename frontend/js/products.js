@@ -27,7 +27,31 @@ const formatDate = (value) => {
   return date.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" });
 };
 
-const hasDiscount = (p) => Number(p.discounted_price) > 0 && Number(p.discounted_price) < Number(p.original_price);
+
+function parseFlyerSourceDates(source) {
+  const text = String(source || "");
+  const match = text.match(/(\d{4})[_-](\d{2})[_-](\d{2}).*?(\d{4})[_-](\d{2})[_-](\d{2})/);
+  if (!match) return { from: null, to: null };
+  return { from: `${match[1]}-${match[2]}-${match[3]}`, to: `${match[4]}-${match[5]}-${match[6]}` };
+}
+
+function flyerDates(product) {
+  const parsed = parseFlyerSourceDates(product.flyer_source || product.offer_note || "");
+  return {
+    from: product.flyer_valid_from || parsed.from,
+    to: product.flyer_valid_to || parsed.to,
+  };
+}
+
+function isOfferActive(product) {
+  const { to } = flyerDates(product);
+  if (!to) return true;
+  const end = new Date(`${to}T23:59:59`);
+  if (Number.isNaN(end.getTime())) return true;
+  return end >= new Date();
+}
+
+const hasDiscount = (p) => isOfferActive(p) && Number(p.discounted_price) > 0 && Number(p.discounted_price) < Number(p.original_price);
 const finalPrice = (p) => hasDiscount(p) ? Number(p.discounted_price) : Number(p.original_price || 0);
 const discountPercent = (p) => {
   if (p.discount_percent) return Math.round(Number(p.discount_percent));
@@ -278,7 +302,8 @@ function createProductCard(p) {
   const sale = hasDiscount(p);
   const favorite = state.favorites.includes(p.id);
   const page = p.flyer_page || (p.aisle_order && p.aisle_order < 900 ? Math.round(p.aisle_order) : null);
-  const validTo = formatDate(p.flyer_valid_to);
+  const dates = flyerDates(p);
+  const validTo = formatDate(dates.to);
 
   const card = document.createElement("article");
   card.className = "product-card";
@@ -286,6 +311,7 @@ function createProductCard(p) {
     <div class="card-image-shell">
       ${sale ? `<div class="discount-badge">-${discountPercent(p)}%</div>` : ""}
       ${page ? `<div class="flyer-page-badge">📄 Volantino p.${page}</div>` : ""}
+      ${!isOfferActive(p) && p.discounted_price ? `<div class="expired-badge">offerta scaduta</div>` : ""}
       <button class="fav-icon ${favorite ? "active" : ""}" type="button" aria-label="Preferito">
         <svg viewBox="0 0 24 24" class="heart-svg"><path d="M12 21s-6-4.35-9-8.7C-1.5 7.5 1.5 3 6 3c2.25 0 4.5 1.5 6 3.75C13.5 4.5 15.75 3 18 3c4.5 0 7.5 4.5 3 9.3C18 16.65 12 21 12 21z"/></svg>
       </button>
@@ -310,7 +336,7 @@ function createProductCard(p) {
         <div class="offer-context">
           ${validTo ? `<span class="context-pill strong">fino al ${validTo}</span>` : ""}
           ${p.offer_note ? `<span class="context-pill">${escapeHtml(p.offer_note)}</span>` : ""}
-          ${page && !validTo ? `<span class="context-pill strong">p.${page}</span>` : ""}
+          ${page && !validTo ? `<span class="context-pill strong">Volantino p.${page}</span>` : ""}
         </div>
         <button class="add-btn" type="button" aria-label="Aggiungi alla lista">+</button>
       </div>

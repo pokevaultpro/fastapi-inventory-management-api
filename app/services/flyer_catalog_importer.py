@@ -76,6 +76,15 @@ def parse_bool(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "si", "sì"}
 
 
+def parse_flyer_source_dates(value: Any) -> tuple[str | None, str | None]:
+    """Extracts YYYY-MM-DD date range from strings such as lidl_flyer_2026_06_11_2026_06_17."""
+    text = str(value or "")
+    match = re.search(r"(\d{4})[_-](\d{2})[_-](\d{2}).*?(\d{4})[_-](\d{2})[_-](\d{2})", text)
+    if not match:
+        return None, None
+    return f"{match.group(1)}-{match.group(2)}-{match.group(3)}", f"{match.group(4)}-{match.group(5)}-{match.group(6)}"
+
+
 def derive_prices(item: dict[str, Any]) -> tuple[float | None, float | None]:
     price = parse_float(item.get("price"))
     old_price = parse_float(item.get("old_price"))
@@ -152,12 +161,15 @@ def set_if_model_has(product: Products, field_name: str, value: Any) -> None:
 
 
 def build_metadata(raw_item: dict[str, Any], payload: dict[str, Any], original_price: float | None, discounted_price: float | None) -> dict[str, Any]:
+    source = raw_item.get("source") or payload.get("title") or payload.get("source") or "flyer_import"
+    parsed_from, parsed_to = parse_flyer_source_dates(source)
     return {
         "brand": raw_item.get("brand"),
         "flyer_page": int(parse_float(raw_item.get("page")) or parse_float(raw_item.get("flyer_page")) or 0) or None,
-        "flyer_valid_from": raw_item.get("valid_from") or payload.get("valid_from"),
-        "flyer_valid_to": raw_item.get("valid_to") or payload.get("valid_to"),
-        "flyer_source": raw_item.get("source") or payload.get("title") or payload.get("source") or "flyer_import",
+        # Whole-flyer dates are applied to every product unless the item has a more specific date.
+        "flyer_valid_from": raw_item.get("valid_from") or payload.get("valid_from") or parsed_from,
+        "flyer_valid_to": raw_item.get("valid_to") or payload.get("valid_to") or parsed_to,
+        "flyer_source": source,
         "flyer_source_url": raw_item.get("source_url") or payload.get("source_url"),
         "is_lidl_plus": parse_bool(raw_item.get("is_lidl_plus") or raw_item.get("lidl_plus")),
         "flyer_imported_at": datetime.utcnow().isoformat(timespec="seconds"),

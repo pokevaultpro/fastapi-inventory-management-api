@@ -555,3 +555,31 @@ body {
   .products-grid { grid-template-columns: 1fr; }
   .products-hero h1 { font-size: 1.75rem; }
 }
+
+/* Polish v6: clearer interactive favorites and expired flyer state */
+.fav-icon {
+  cursor: pointer;
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.fav-icon:hover {
+  transform: scale(1.08);
+  background: #fff1f2;
+  box-shadow: 0 12px 24px rgba(239,68,68,.16);
+}
+.fav-icon:hover .heart-svg { stroke: #ef4444; }
+.expired-badge {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: rgba(100,116,139,.92);
+  color: white;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}

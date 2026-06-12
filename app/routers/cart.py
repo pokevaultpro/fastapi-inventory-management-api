@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from typing import Annotated, Optional
 from starlette import status
 from datetime import datetime
+import re
 
 from app.database import SessionLocal
 from app.routers import shopping_history_item
@@ -24,6 +25,48 @@ def get_db():
 
 db_dependency = Annotated[Session, Depends(get_db)]
 user_dependency = Annotated[dict, Depends(get_current_user)]
+
+
+def _parse_date(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")[:10])
+    except ValueError:
+        return None
+
+
+def _parse_source_dates(value: str | None) -> tuple[str | None, str | None]:
+    text = str(value or "")
+    match = re.search(r"(\d{4})[_-](\d{2})[_-](\d{2}).*?(\d{4})[_-](\d{2})[_-](\d{2})", text)
+    if not match:
+        return None, None
+    return f"{match.group(1)}-{match.group(2)}-{match.group(3)}", f"{match.group(4)}-{match.group(5)}-{match.group(6)}"
+
+
+def _effective_flyer_to(product: Products) -> str | None:
+    valid_to = getattr(product, "flyer_valid_to", None)
+    if valid_to:
+        return valid_to
+    _, parsed_to = _parse_source_dates(getattr(product, "flyer_source", None))
+    return parsed_to
+
+
+def _offer_is_active(product: Products) -> bool:
+    end = _parse_date(_effective_flyer_to(product))
+    if end is None:
+        return True
+    return end.date() >= datetime.utcnow().date()
+
+
+def _product_current_price(product: Products) -> float:
+    if _offer_is_active(product) and product.discounted_price is not None:
+        return float(product.discounted_price)
+    return float(product.original_price)
+
+
+def _product_is_discounted_now(product: Products) -> bool:
+    return _offer_is_active(product) and product.discounted_price is not None and product.discounted_price < product.original_price
 
 class CartRequest(BaseModel):
     product_id: int = Field(gt=0)
@@ -87,8 +130,7 @@ async def create_shopping_history(user: user_dependency, db: db_dependency):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="The cart is empty!")
     created_at = datetime.utcnow().isoformat()
     total_items = sum(item.quantity for item in cart_model)
-    total_price = sum((item.product.discounted_price or item.product.original_price)
-                                     * item.quantity for item in cart_model)
+    total_price = sum(_product_current_price(item.product) * item.quantity for item in cart_model)
     shopping_history_model = ShoppingHistory(total_items=total_items, total_price=total_price,
                                              user_id=owner_id, created_at=created_at)
     db.add(shopping_history_model)
@@ -97,8 +139,8 @@ async def create_shopping_history(user: user_dependency, db: db_dependency):
 
     for item in cart_model:
         product = item.product
-        price_paid = product.discounted_price or product.original_price
-        was_discounted = True if product.discounted_price else False
+        price_paid = _product_current_price(product)
+        was_discounted = _product_is_discounted_now(product)
 
         shopping_history_item_model = ShoppingHistoryItem(
             history_id=shopping_history_model.id,
