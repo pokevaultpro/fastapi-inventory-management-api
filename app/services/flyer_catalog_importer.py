@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
+from datetime import datetime
 from typing import Any, Callable, Optional
 
 from sqlalchemy.orm import Session
@@ -67,19 +68,15 @@ def parse_float(value: Any) -> float | None:
         return None
 
 
+def parse_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "si", "sì"}
+
+
 def derive_prices(item: dict[str, Any]) -> tuple[float | None, float | None]:
-    """
-    Converts flyer fields to the app's current Product price model.
-
-    App meaning:
-    - original_price: displayed regular price
-    - discounted_price: displayed offer price, only when there is a known old price
-
-    Accepted input alternatives:
-    - price + old_price
-    - discounted_price + original_price
-    - price only
-    """
     price = parse_float(item.get("price"))
     old_price = parse_float(item.get("old_price"))
     original_price = parse_float(item.get("original_price"))
@@ -102,16 +99,21 @@ def derive_prices(item: dict[str, Any]) -> tuple[float | None, float | None]:
     return None, None
 
 
+def derive_discount_percent(item: dict[str, Any], original_price: float | None, discounted_price: float | None) -> float | None:
+    explicit = parse_float(item.get("discount_percent"))
+    if explicit is not None:
+        return explicit
+    if original_price and discounted_price and discounted_price < original_price:
+        return round((1 - discounted_price / original_price) * 100, 2)
+    return None
+
+
 def ensure_supermarket(db: Session, retailer: str, create_missing: bool = True) -> Supermarkets:
     retailer = re.sub(r"\s+", " ", retailer or "").strip()
     if not retailer:
         raise ValueError("retailer is required")
 
-    existing = (
-        db.query(Supermarkets)
-        .filter(Supermarkets.name.ilike(retailer))
-        .first()
-    )
+    existing = db.query(Supermarkets).filter(Supermarkets.name.ilike(retailer)).first()
     if existing:
         return existing
 
@@ -126,10 +128,6 @@ def ensure_supermarket(db: Session, retailer: str, create_missing: bool = True) 
 
 
 def find_existing_product(db: Session, supermarket_id: int, name: str, unit: str) -> Products | None:
-    """
-    Lightweight duplicate detection.
-    First tries exact case-insensitive name + unit, then exact name only.
-    """
     product = (
         db.query(Products)
         .filter(Products.supermarket_id == supermarket_id)
@@ -148,6 +146,26 @@ def find_existing_product(db: Session, supermarket_id: int, name: str, unit: str
     )
 
 
+def set_if_model_has(product: Products, field_name: str, value: Any) -> None:
+    if hasattr(product, field_name):
+        setattr(product, field_name, value)
+
+
+def build_metadata(raw_item: dict[str, Any], payload: dict[str, Any], original_price: float | None, discounted_price: float | None) -> dict[str, Any]:
+    return {
+        "brand": raw_item.get("brand"),
+        "flyer_page": int(parse_float(raw_item.get("page")) or parse_float(raw_item.get("flyer_page")) or 0) or None,
+        "flyer_valid_from": raw_item.get("valid_from") or payload.get("valid_from"),
+        "flyer_valid_to": raw_item.get("valid_to") or payload.get("valid_to"),
+        "flyer_source": raw_item.get("source") or payload.get("title") or payload.get("source") or "flyer_import",
+        "flyer_source_url": raw_item.get("source_url") or payload.get("source_url"),
+        "is_lidl_plus": parse_bool(raw_item.get("is_lidl_plus") or raw_item.get("lidl_plus")),
+        "flyer_imported_at": datetime.utcnow().isoformat(timespec="seconds"),
+        "offer_note": raw_item.get("notes") or raw_item.get("note"),
+        "discount_percent": derive_discount_percent(raw_item, original_price, discounted_price),
+    }
+
+
 def import_flyer_catalog(
     db: Session,
     payload: dict[str, Any],
@@ -163,12 +181,7 @@ def import_flyer_catalog(
     if not isinstance(items, list):
         raise ValueError("payload must contain a list field named 'products' or 'offers'")
 
-    summary = ImportSummary(
-        retailer=supermarket.name,
-        supermarket_id=supermarket.id,
-        errors=[],
-        products=[],
-    )
+    summary = ImportSummary(retailer=supermarket.name, supermarket_id=supermarket.id, errors=[], products=[])
 
     for index, raw_item in enumerate(items, start=1):
         if not isinstance(raw_item, dict):
@@ -194,9 +207,7 @@ def import_flyer_catalog(
             summary.errors.append({"index": index, "name": name, "error": "missing or invalid price"})
             continue
 
-        image_url = None
-        if image_resolver:
-            image_url = image_resolver(raw_item, name)
+        image_url = image_resolver(raw_item, name) if image_resolver else None
         if not image_url:
             image_url = raw_item.get("image") or raw_item.get("image_url") or raw_item.get("image_path")
 
@@ -205,6 +216,7 @@ def import_flyer_catalog(
             page = parse_float(raw_item.get("page"))
             aisle_order = page if page is not None else 999.0
 
+        metadata = build_metadata(raw_item, payload, original_price, discounted_price)
         existing = find_existing_product(db, supermarket.id, name, unit)
 
         if existing and update_existing:
@@ -215,11 +227,15 @@ def import_flyer_catalog(
             existing.aisle_order = aisle_order
             if image_url:
                 existing.image = image_url
+            for key, value in metadata.items():
+                set_if_model_has(existing, key, value)
             summary.updated += 1
             product = existing
+            status = "updated"
         elif existing and not update_existing:
             summary.skipped += 1
             product = existing
+            status = "skipped_existing"
         else:
             product = Products(
                 name=name,
@@ -236,9 +252,12 @@ def import_flyer_catalog(
                 protein=None,
                 location=None,
             )
+            for key, value in metadata.items():
+                set_if_model_has(product, key, value)
             db.add(product)
             db.flush()
             summary.created += 1
+            status = "created"
 
         summary.products.append({
             "id": product.id,
@@ -248,7 +267,9 @@ def import_flyer_catalog(
             "original_price": product.original_price,
             "discounted_price": product.discounted_price,
             "image": product.image,
-            "created_or_updated": "updated" if existing and update_existing else "created" if not existing else "skipped_existing",
+            "flyer_page": getattr(product, "flyer_page", None),
+            "is_lidl_plus": getattr(product, "is_lidl_plus", False),
+            "created_or_updated": status,
         })
 
     db.commit()

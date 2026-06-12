@@ -1,35 +1,62 @@
-export function openProductModal(item, supermarket) {
+function formatEuro(value) {
+  return Number(value || 0).toLocaleString("it-IT", { style: "currency", currency: "EUR" });
+}
 
-  // ===== IMMAGINE E INFO BASE =====
-  document.getElementById("modal-image").src = item.image;
+function formatDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function hasDiscount(item) {
+  return Number(item.discounted_price) > 0 && Number(item.discounted_price) < Number(item.original_price);
+}
+
+function discountPercent(item) {
+  if (item.discount_percent) return Math.round(Number(item.discount_percent));
+  if (!hasDiscount(item)) return 0;
+  return Math.round((1 - Number(item.discounted_price) / Number(item.original_price)) * 100);
+}
+
+export function openProductModal(item, supermarket = {}) {
+  document.getElementById("modal-image").src = item.image || "/static/images/placeholder.jpg";
   document.getElementById("modal-category").textContent = item.category || "Prodotto";
-  document.getElementById("modal-name").textContent = item.name;
+  document.getElementById("modal-name").textContent = item.name || "Prodotto";
+  document.getElementById("modal-store").textContent = supermarket.name || "Negozio";
+  document.getElementById("modal-location").textContent = item.location || "Non indicata";
 
-  // ===== SUPERMERCATO =====
-  document.getElementById("modal-store").textContent = supermarket.name;
-  document.getElementById("modal-location").textContent = item.location;
+  const lidlPlus = document.getElementById("modal-lidl-plus");
+  lidlPlus.classList.toggle("hidden", !item.is_lidl_plus);
 
-  // ===== PREZZO + SCONTO =====
-  if (item.discounted_price) {
-    const discountPerc = Math.round((1 - item.discounted_price / item.original_price) * 100);
-
+  const sale = hasDiscount(item);
+  if (sale) {
     document.getElementById("modal-price").innerHTML = `
-      <span class="discounted">${item.original_price.toFixed(2).replace('.', ',')} €</span>
-      <span class="final-price">${item.discounted_price.toFixed(2).replace('.', ',')} €</span>
+      <span class="discounted">${formatEuro(item.original_price)}</span>
+      <span class="final-price">${formatEuro(item.discounted_price)}</span>
     `;
-
     const badge = document.getElementById("modal-discount-badge");
-    badge.textContent = `-${discountPerc}%`;
+    badge.textContent = `-${discountPercent(item)}%`;
     badge.classList.remove("hidden");
-
   } else {
-    document.getElementById("modal-price").innerHTML =
-      `<span class="final-price">${item.original_price.toFixed(2).replace('.', ',')} €</span>`;
-
+    document.getElementById("modal-price").innerHTML = `<span class="final-price">${formatEuro(item.original_price)}</span>`;
     document.getElementById("modal-discount-badge").classList.add("hidden");
   }
 
-  // ===== NUTRIZIONALI =====
+  const flyerBox = document.getElementById("modal-flyer-box");
+  const page = item.flyer_page || (item.aisle_order && item.aisle_order < 900 ? Math.round(item.aisle_order) : null);
+  const hasFlyerInfo = Boolean(page || item.flyer_valid_from || item.flyer_valid_to || item.is_lidl_plus);
+
+  if (hasFlyerInfo) {
+    flyerBox.classList.remove("hidden");
+    document.getElementById("modal-flyer-page").textContent = page ? `Pagina ${page}` : "Pagina non indicata";
+    const from = formatDate(item.flyer_valid_from);
+    const to = formatDate(item.flyer_valid_to);
+    document.getElementById("modal-flyer-validity").textContent = from && to ? `${from} – ${to}` : to ? `fino al ${to}` : "Non indicata";
+  } else {
+    flyerBox.classList.add("hidden");
+  }
+
   const grid = document.getElementById("modal-nutrition-grid");
   grid.innerHTML = "";
 
@@ -37,10 +64,10 @@ export function openProductModal(item, supermarket) {
     { label: "Calorie", value: item.calories, unit: "kcal" },
     { label: "Grassi", value: item.fat, unit: "g" },
     { label: "Carboidrati", value: item.carbs, unit: "g" },
-    { label: "Proteine", value: item.protein, unit: "g" }
+    { label: "Proteine", value: item.protein, unit: "g" },
   ];
 
-  cards.forEach(c => {
+  cards.forEach((c) => {
     const div = document.createElement("div");
     div.className = "nutri-card";
     div.innerHTML = `
@@ -50,11 +77,9 @@ export function openProductModal(item, supermarket) {
     grid.appendChild(div);
   });
 
-  // ===== MOSTRA MODAL =====
   document.getElementById("product-modal").classList.remove("hidden");
 }
 
 export function closeModal() {
-  document.getElementById("product-modal").classList.add("hidden");
+  document.getElementById("product-modal")?.classList.add("hidden");
 }
-

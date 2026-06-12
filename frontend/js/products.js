@@ -1,454 +1,386 @@
 import CONFIG from "./config.js";
 import { openProductModal } from "./modal-function.js";
 
+const state = {
+  products: [],
+  supermarkets: [],
+  favorites: [],
+  category: "all",
+  store: "all",
+  mode: new URLSearchParams(window.location.search).get("sale") === "1" ? "sale" : "all",
+  sort: "best-discount",
+  visibleCount: window.innerWidth < 720 ? 24 : 60,
+};
+
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+const formatEuro = (value) => {
+  const number = Number(value || 0);
+  return number.toLocaleString("it-IT", { style: "currency", currency: "EUR" });
+};
+
+const formatDate = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" });
+};
+
+const hasDiscount = (p) => Number(p.discounted_price) > 0 && Number(p.discounted_price) < Number(p.original_price);
+const finalPrice = (p) => hasDiscount(p) ? Number(p.discounted_price) : Number(p.original_price || 0);
+const discountPercent = (p) => {
+  if (p.discount_percent) return Math.round(Number(p.discount_percent));
+  if (!hasDiscount(p)) return 0;
+  return Math.round((1 - Number(p.discounted_price) / Number(p.original_price)) * 100);
+};
+
+const getSupermarket = (p) => state.supermarkets.find((s) => s.id === p.supermarket_id) || null;
+const getSupermarketName = (p) => getSupermarket(p)?.name || "Negozio";
+
+const imageSrc = (p) => {
+  if (!p.image) return "/static/images/placeholder.jpg";
+  return p.image;
+};
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function debounce(fn, delay = 150) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
-  await Promise.all([
-    loadProducts(),
-    loadFavorites()
+  paintSkeletons();
+  await Promise.all([loadProducts(), loadFavorites()]);
+  populateStoreFilter();
+  populateCategoryBar();
+  bindEvents();
+  setMode(state.mode);
+  render();
+});
+
+async function loadProducts() {
+  const [prodRes, supRes] = await Promise.all([
+    apiFetch(`${CONFIG.API_BASE_URL}/product`),
+    apiFetch(`${CONFIG.API_BASE_URL}/supermarket`),
   ]);
 
-  renderProducts();
-
-  if (window.innerWidth < 480) {
-    updateVisibleRange();
-  }
-});
-
-
-    let allProducts = [];
-    let supermarkets = [];
-    let currentCategory = "all";
-    let currentStore = "all";
-    let favorites = [];
-    let visibleStart = 0;
-    let visibleEnd = 0;
-
-    let CARD_HEIGHT = 260; // desktop
-    let CARD_HEIGHT_MOBILE = 338; // mobile
-    let BUFFER = 10; // quante card extra mostrare
-    let filtered = [];
-
-    let currentPage = 1;
-const PAGE_SIZE = 20;
-
-async function toggleFavorite(id) {
-  if (favorites.includes(id)) {
-    // DELETE
-await apiFetch(`${CONFIG.API_BASE_URL}/favorite/${id}`, {
-  method: "DELETE",
-  headers: {
-    "Authorization": "Bearer " + localStorage.getItem("token")
-  }
-});
-
-    favorites = favorites.filter(f => f !== id);
-  } else {
-    // POST
-await apiFetch(`${CONFIG.API_BASE_URL}/favorite`, {
-  method: "POST",
-  headers: {
-    "Authorization": "Bearer " + localStorage.getItem("token"),
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({ product_id: id })
-});
-
-    favorites.push(id);
-  }
-
-  renderProducts();
-  updateVisibleRange();
+  state.products = prodRes?.ok ? await prodRes.json() : [];
+  state.supermarkets = supRes?.ok ? await supRes.json() : [];
 }
 
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("sale") === "1") {
-      currentCategory = "sale";
-
-      // attiva la pillola "Offerte"
-      document.querySelectorAll(".cat-pill").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.cat === "sale");
-      });
-    }
 async function loadFavorites() {
-  const res = await apiFetch(`${CONFIG.API_BASE_URL}/favorite`, {
-    headers: {
-      "Authorization": "Bearer " + localStorage.getItem("token")
-    }
-  });
-
-  favorites = res.ok ? await res.json() : [];
+  const res = await apiFetch(`${CONFIG.API_BASE_URL}/favorite`);
+  state.favorites = res?.ok ? await res.json() : [];
 }
 
+function bindEvents() {
+  $("#search-input")?.addEventListener("input", debounce(() => {
+    state.visibleCount = window.innerWidth < 720 ? 24 : 60;
+    render();
+  }));
 
-    async function loadProducts() {
-      const [prodRes, supRes] = await Promise.all([
-        apiFetch(`${CONFIG.API_BASE_URL}/product`),
-        apiFetch(`${CONFIG.API_BASE_URL}/supermarket`)
-      ]);
-
-      allProducts = prodRes.ok ? await prodRes.json() : [];
-      supermarkets = supRes.ok ? await supRes.json() : [];
-
-      populateStoreFilter();
-
-
-      renderProducts();
-    }
-
-    document.getElementById("search-input")
-      .addEventListener("input", renderProducts);
-    document.getElementById("store-filter")
-      .addEventListener("change", setStoreFilter);
-    document.querySelectorAll(".cat-pill").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const cat = btn.dataset.cat;
-        setCategory(cat);
-      });
-    });
-
-
-
-    function setCategory(cat) {
-      currentCategory = cat;
-
-      document.querySelectorAll(".cat-pill").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.cat === cat);
-      });
-
-      renderProducts();
-    }
-
- function renderProducts() {
-  const search = document.getElementById("search-input").value.toLowerCase();
-
-  // 1. FILTRO
-  filtered = allProducts.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(search);
-    const matchesCategory =
-      currentCategory === "all" ||
-      (currentCategory === "sale" && p.discounted_price !== null) ||
-      (currentCategory === "favorites" && favorites.includes(p.id)) ||
-      p.category === currentCategory;
-
-    const matchesStore =
-      currentStore === "all" ||
-      p.supermarket_id == currentStore;
-
-    return matchesSearch && matchesCategory && matchesStore;
+  $("#store-filter")?.addEventListener("change", (event) => {
+    state.store = event.target.value;
+    state.visibleCount = window.innerWidth < 720 ? 24 : 60;
+    render();
   });
 
-  // 2. ORDINAMENTO
-  if (currentStore === "all") {
-    filtered.sort((a, b) => a.name.localeCompare(b.name));
-  } else {
-    filtered.sort((a, b) => (a.aisle_order ?? 9999) - (b.aisle_order ?? 9999));
+  $("#sort-select")?.addEventListener("change", (event) => {
+    state.sort = event.target.value;
+    render();
+  });
+
+  $("#category-bar")?.addEventListener("click", (event) => {
+    const button = event.target.closest(".cat-pill");
+    if (!button) return;
+    state.category = button.dataset.cat;
+    state.visibleCount = window.innerWidth < 720 ? 24 : 60;
+    updateActiveCategory();
+    render();
+  });
+
+  $$(".quick-filter").forEach((button) => {
+    button.addEventListener("click", () => setMode(button.dataset.mode));
+  });
+
+  $("#load-more-btn")?.addEventListener("click", () => {
+    state.visibleCount += window.innerWidth < 720 ? 24 : 60;
+    render();
+  });
+
+  window.addEventListener("resize", debounce(() => render(), 200));
+}
+
+function setMode(mode) {
+  state.mode = mode || "all";
+  $$(".quick-filter").forEach((btn) => btn.classList.toggle("active", btn.dataset.mode === state.mode));
+  render();
+}
+
+function populateStoreFilter() {
+  const select = $("#store-filter");
+  if (!select) return;
+  select.innerHTML = `<option value="all">Tutti i negozi</option>`;
+  state.supermarkets
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, "it"))
+    .forEach((s) => {
+      const option = document.createElement("option");
+      option.value = s.id;
+      option.textContent = s.name;
+      select.appendChild(option);
+    });
+}
+
+function populateCategoryBar() {
+  const bar = $("#category-bar");
+  if (!bar) return;
+  const categories = Array.from(new Set(state.products.map((p) => p.category).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, "it"));
+
+  bar.innerHTML = `<button class="cat-pill active" data-cat="all">Tutte le categorie</button>`;
+  categories.forEach((category) => {
+    const button = document.createElement("button");
+    button.className = "cat-pill";
+    button.dataset.cat = category;
+    button.textContent = category;
+    bar.appendChild(button);
+  });
+}
+
+function updateActiveCategory() {
+  $$(".cat-pill").forEach((btn) => btn.classList.toggle("active", btn.dataset.cat === state.category));
+}
+
+function getFilteredProducts() {
+  const search = ($("#search-input")?.value || "").trim().toLowerCase();
+
+  let result = state.products.filter((p) => {
+    const name = String(p.name || "").toLowerCase();
+    const category = String(p.category || "").toLowerCase();
+    const store = getSupermarketName(p).toLowerCase();
+    const matchesSearch = !search || name.includes(search) || category.includes(search) || store.includes(search);
+    const matchesCategory = state.category === "all" || p.category === state.category;
+    const matchesStore = state.store === "all" || String(p.supermarket_id) === String(state.store);
+    const matchesMode =
+      state.mode === "all" ||
+      (state.mode === "sale" && hasDiscount(p)) ||
+      (state.mode === "lidl-plus" && Boolean(p.is_lidl_plus)) ||
+      (state.mode === "favorites" && state.favorites.includes(p.id));
+
+    return matchesSearch && matchesCategory && matchesStore && matchesMode;
+  });
+
+  result.sort((a, b) => {
+    switch (state.sort) {
+      case "price-asc": return finalPrice(a) - finalPrice(b);
+      case "price-desc": return finalPrice(b) - finalPrice(a);
+      case "name-asc": return String(a.name).localeCompare(String(b.name), "it");
+      case "category": return String(a.category || "").localeCompare(String(b.category || ""), "it") || String(a.name).localeCompare(String(b.name), "it");
+      case "flyer-page": return (a.flyer_page || a.aisle_order || 9999) - (b.flyer_page || b.aisle_order || 9999) || String(a.name).localeCompare(String(b.name), "it");
+      case "best-discount":
+      default:
+        return discountPercent(b) - discountPercent(a) || finalPrice(a) - finalPrice(b);
+    }
+  });
+
+  return result;
+}
+
+function render() {
+  const filtered = getFilteredProducts();
+  renderStats();
+  renderBestDeal();
+  renderHeader(filtered);
+  renderGrid(filtered);
+}
+
+function renderStats() {
+  $("#stat-total").textContent = state.products.length;
+  $("#stat-sale").textContent = state.products.filter(hasDiscount).length;
+  $("#stat-stores").textContent = state.supermarkets.length;
+}
+
+function renderBestDeal() {
+  const box = $("#best-deal-box");
+  if (!box) return;
+
+  const best = state.products.filter(hasDiscount).sort((a, b) => discountPercent(b) - discountPercent(a))[0];
+  if (!best) {
+    box.textContent = "Nessuna offerta importata.";
+    return;
   }
 
-  // 3. CARD HEIGHT
-  const isMobile = window.innerWidth < 480;
-  const cardHeight = isMobile ? CARD_HEIGHT_MOBILE : CARD_HEIGHT;
-
-  // 4. VIRTUAL CONTAINER HEIGHT
-  const container = document.getElementById("virtual-container");
-
-  // 5. SPAZIO SOPRA PER STICKY
-  const sticky = document.querySelector(".sticky-header");
-  const stickyHeight = sticky ? sticky.offsetHeight : 0;
-  document.getElementById("spacer-top").style.height = stickyHeight + "px";
-
-if (isMobile) {
-  container.style.height = filtered.length * cardHeight + "px";
-  updateVisibleRange();
-} else {
-  renderDesktopPaged();
-}
+  box.innerHTML = `
+    <div class="best-deal-name">${escapeHtml(best.name)}</div>
+    <div class="best-deal-price">${formatEuro(finalPrice(best))}</div>
+    <div class="best-deal-meta">-${discountPercent(best)}% · ${best.flyer_page ? `pagina ${best.flyer_page}` : getSupermarketName(best)}</div>
+  `;
 }
 
-function updateVisibleRange() {
-  const viewportHeight = window.innerHeight;
-  const isMobile = window.innerWidth < 480;
-  const cardHeight = isMobile ? CARD_HEIGHT_MOBILE : CARD_HEIGHT;
+function renderHeader(filtered) {
+  $("#result-count").textContent = filtered.length;
 
-  // scroll effettivo (non serve topOffset per la prima card)
-  const scrollTop = window.scrollY;
+  const modeLabel = {
+    all: "Tutto il catalogo",
+    sale: "Solo prodotti in offerta",
+    "lidl-plus": "Solo offerte Lidl Plus",
+    favorites: "Solo preferiti",
+  }[state.mode] || "Tutto il catalogo";
 
-  visibleStart = Math.floor(scrollTop / cardHeight);
-  visibleEnd = Math.min(
-    filtered.length,
-    Math.ceil((scrollTop + viewportHeight) / cardHeight) + BUFFER
-  );
-
-  renderVirtualProducts();
+  const categoryLabel = state.category === "all" ? "" : ` · ${state.category}`;
+  $("#active-filter-label").textContent = `${modeLabel}${categoryLabel}`;
 }
 
-function renderVirtualProducts() {
-  const grid = document.getElementById("products-grid");
-  [...grid.querySelectorAll(".product-card")].forEach(el => el.remove());
+function renderGrid(filtered) {
+  const grid = $("#products-grid");
+  const empty = $("#empty-state");
+  const loadMore = $("#load-more-btn");
+  if (!grid) return;
 
-  const isMobile = window.innerWidth < 480;
-  const cardHeight = isMobile ? CARD_HEIGHT_MOBILE : CARD_HEIGHT;
-
-  filtered.slice(visibleStart, visibleEnd).forEach((p, i) => {
-    const realIndex = visibleStart + i;
-    const card = createProductCard(p);
-
-    card.style.position = "absolute";
-    card.style.top = realIndex * cardHeight + "px"; // NIENTE offset sulla prima card
-    card.style.left = "0";
-    card.style.right = "0";
-
-    grid.appendChild(card);
-  });
-}
-
-function renderDesktopPaged() {
-  const grid = document.getElementById("products-grid");
   grid.innerHTML = "";
 
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const end = start + PAGE_SIZE;
+  if (!filtered.length) {
+    empty?.classList.remove("hidden");
+    loadMore?.classList.add("hidden");
+    return;
+  }
 
-  const pageItems = filtered.slice(start, end);
+  empty?.classList.add("hidden");
 
-  pageItems.forEach(p => {
-    const card = createProductCard(p);
-    grid.appendChild(card);
+  const visible = filtered.slice(0, state.visibleCount);
+  const fragment = document.createDocumentFragment();
+  visible.forEach((product) => fragment.appendChild(createProductCard(product)));
+  grid.appendChild(fragment);
+
+  if (filtered.length > state.visibleCount) {
+    loadMore?.classList.remove("hidden");
+    loadMore.textContent = `Mostra altri ${Math.min(60, filtered.length - state.visibleCount)} prodotti`;
+  } else {
+    loadMore?.classList.add("hidden");
+  }
+}
+
+function createProductCard(p) {
+  const supermarket = getSupermarket(p);
+  const sale = hasDiscount(p);
+  const favorite = state.favorites.includes(p.id);
+  const page = p.flyer_page || (p.aisle_order && p.aisle_order < 900 ? Math.round(p.aisle_order) : null);
+  const validTo = formatDate(p.flyer_valid_to);
+
+  const card = document.createElement("article");
+  card.className = "product-card";
+  card.innerHTML = `
+    <div class="card-image-shell">
+      ${sale ? `<div class="discount-badge">-${discountPercent(p)}%</div>` : ""}
+      ${page ? `<div class="flyer-page-badge">📄 Volantino p.${page}</div>` : ""}
+      <button class="fav-icon ${favorite ? "active" : ""}" type="button" aria-label="Preferito">
+        <svg viewBox="0 0 24 24" class="heart-svg"><path d="M12 21s-6-4.35-9-8.7C-1.5 7.5 1.5 3 6 3c2.25 0 4.5 1.5 6 3.75C13.5 4.5 15.75 3 18 3c4.5 0 7.5 4.5 3 9.3C18 16.65 12 21 12 21z"/></svg>
+      </button>
+      <img loading="lazy" src="${escapeHtml(imageSrc(p))}" class="product-img" alt="${escapeHtml(p.name)}" onerror="this.src='/static/images/placeholder.jpg'">
+    </div>
+
+    <div class="product-body">
+      <div class="product-topline">
+        <span class="store-chip">${escapeHtml(getSupermarketName(p))}</span>
+        ${p.is_lidl_plus ? `<span class="lidl-plus-chip">Lidl Plus</span>` : `<span class="category-chip">${escapeHtml(p.category || "Altro")}</span>`}
+      </div>
+
+      <div class="product-name">${escapeHtml(p.name)}</div>
+      <div class="product-unit">${escapeHtml(p.unit || "pz")}</div>
+
+      <div class="price-line">
+        ${sale ? `<span class="old-price">${formatEuro(p.original_price)}</span><span class="new-price">${formatEuro(p.discounted_price)}</span>` : `<span class="regular-price">${formatEuro(p.original_price)}</span>`}
+        <span class="unit-price">/ ${escapeHtml(p.unit || "pz")}</span>
+      </div>
+
+      <div class="card-footer">
+        <div class="offer-context">
+          ${validTo ? `<span class="context-pill strong">fino al ${validTo}</span>` : ""}
+          ${p.offer_note ? `<span class="context-pill">${escapeHtml(p.offer_note)}</span>` : ""}
+          ${page && !validTo ? `<span class="context-pill strong">p.${page}</span>` : ""}
+        </div>
+        <button class="add-btn" type="button" aria-label="Aggiungi alla lista">+</button>
+      </div>
+    </div>
+  `;
+
+  card.querySelector(".fav-icon").addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleFavorite(p.id);
   });
 
-  renderPagination();
+  card.querySelector(".add-btn").addEventListener("click", (event) => {
+    event.stopPropagation();
+    addToCart(p.id);
+  });
+
+  card.addEventListener("click", () => openProductModal(p, supermarket || { name: getSupermarketName(p) }));
+  return card;
 }
 
-function renderPagination() {
-  let pager = document.getElementById("pagination");
+async function toggleFavorite(id) {
+  const isFavorite = state.favorites.includes(id);
+  const res = await apiFetch(`${CONFIG.API_BASE_URL}/favorite${isFavorite ? `/${id}` : ""}`, {
+    method: isFavorite ? "DELETE" : "POST",
+    body: isFavorite ? undefined : JSON.stringify({ product_id: id }),
+  });
 
-  if (!pager) {
-    pager = document.createElement("div");
-    pager.id = "pagination";
-    pager.className = "pagination-bar";
-    document.querySelector(".products-page").appendChild(pager);
+  if (!res?.ok && res?.status !== 204) {
+    showToast("Non riesco ad aggiornare i preferiti", false);
+    return;
   }
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const windowSize = 5;
-
-  let start = Math.max(1, currentPage - Math.floor(windowSize / 2));
-  let end = start + windowSize - 1;
-
-  if (end > totalPages) {
-    end = totalPages;
-    start = Math.max(1, end - windowSize + 1);
-  }
-
-  pager.innerHTML = "";
-
-  if (currentPage > 1) {
-    pager.appendChild(createPageBtn("←", currentPage - 1));
-  }
-
-  if (start > 1) {
-    pager.appendChild(createPageBtn("1"));
-    if (start > 2) pager.appendChild(dots());
-  }
-
-  for (let i = start; i <= end; i++) {
-    pager.appendChild(createPageBtn(i));
-  }
-
-  if (end < totalPages) {
-    if (end < totalPages - 1) pager.appendChild(dots());
-    pager.appendChild(createPageBtn(totalPages));
-  }
-
-  if (currentPage < totalPages) {
-    pager.appendChild(createPageBtn("→", currentPage + 1));
-  }
+  state.favorites = isFavorite ? state.favorites.filter((item) => item !== id) : [...state.favorites, id];
+  render();
 }
 
-function createPageBtn(label, page = label) {
-  const btn = document.createElement("button");
-  btn.textContent = label;
-  btn.className = "page-btn";
-  if (page === currentPage) btn.classList.add("active");
+async function addToCart(productId) {
+  const res = await apiFetch(`${CONFIG.API_BASE_URL}/cart`, {
+    method: "POST",
+    body: JSON.stringify({ product_id: productId, quantity: 1 }),
+  });
 
-  btn.onclick = () => {
-    currentPage = page;
-    renderDesktopPaged();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  return btn;
-}
-
-function dots() {
-  const span = document.createElement("span");
-  span.textContent = "...";
-  span.className = "dots";
-  return span;
-}
-
-
-
-
-    async function addToCart(productId) {
-      const res = await apiFetch(`${CONFIG.API_BASE_URL}/cart`, {
-        method: "POST",
-        headers: {
-          "Authorization": "Bearer " + localStorage.getItem("token"),
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ product_id: productId, quantity: 1 })
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        showToast(err.detail || "Errore durante l'aggiunta", false);
-        return;
-      }
-
-      showToast("Aggiunto alla lista spesa");
-    }
-
-
-    function showToast(message, success = true) {
-      const toast = document.getElementById("toast");
-      toast.textContent = message;
-      toast.style.background = success ? "#2ecc71" : "#e53935";
-      toast.classList.add("show");
-
-      setTimeout(() => {
-        toast.classList.remove("show");
-      }, 2000);
-    }
-
-    function populateStoreFilter() {
-      const select = document.getElementById("store-filter");
-      select.innerHTML = `<option value="all">Tutti i negozi</option>`;
-
-      supermarkets.forEach(s => {
-        const opt = document.createElement("option");
-        opt.value = s.id;
-        opt.textContent = s.name;
-        select.appendChild(opt);
-      });
-    }
-    function setStoreFilter() {
-      currentStore = document.getElementById("store-filter").value;
-      renderProducts();
-    }
-
-    function createProductCard(p) {
-      const hasDiscount = p.discounted_price !== null;
-      const supermarket = supermarkets.find(s => s.id === p.supermarket_id);
-      const supermarketName = supermarket ? supermarket.name : "";
-
-      const card = document.createElement("div");
-      card.className = "product-card";
-
-    card.innerHTML = `
-        <div class="img-wrapper">
-
-          ${hasDiscount ? `
-            <div class="discount-badge">
-              -${Math.round((1 - p.discounted_price / p.original_price) * 100)}%
-            </div>` : ""
-          }
-
-          <img loading="lazy"
-               src="${p.image}"
-               class="product-img"
-               onerror="this.src='/static/images/placeholder.jpg'">
-
-          <div class="fav-icon ${favorites.includes(p.id) ? "active" : ""}" data-id="${p.id}">
-            <svg viewBox="0 0 24 24" class="heart-svg">
-              <path d="M12 21s-6-4.35-9-8.7C-1.5 7.5 1.5 3 6 3c2.25 0 4.5 1.5 6 3.75C13.5 4.5 15.75 3 18 3c4.5 0 7.5 4.5 3 9.3C18 16.65 12 21 12 21z"/>
-            </svg>
-          </div>
-
-        </div>
-
-        <div class="product-info">
-
-          <div class="product-name">${p.name}</div>
-
-          <div class="product-meta-row">
-            <span class="product-brand">${supermarketName}</span>
-            <span class="product-category">${p.category}</span>
-          </div>
-
-          <div class="nutri-row">
-            ${p.calories ? `<span class="nutri-badge">CAL ${p.calories}</span>` : ""}
-            ${p.protein ? `<span class="nutri-badge">PROT ${p.protein}g</span>` : ""}
-          </div>
-
-          <div class="price-row">
-            ${
-              hasDiscount
-                ? `
-                  <span class="old-price">€ ${p.original_price.toFixed(2).replace(".", ",")}</span>
-                  <span class="new-price">€ ${p.discounted_price.toFixed(2).replace(".", ",")}</span>
-                `
-                : `
-                  <span class="regular-price">€ ${p.original_price.toFixed(2).replace(".", ",")}</span>
-                `
-            }
-            <span class="unit-tag">/ ${p.unit || "pz"}</span>
-          </div>
-
-          <button class="add-btn" data-id="${p.id}">
-            + Aggiungi
-          </button>
-
-        </div>
-      `;
-
-      // ❤️ CLICK SUL CUORE
-      const favBtn = card.querySelector(".fav-icon");
-      favBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        toggleFavorite(p.id);
-      });
-
-      // 🛒 CLICK SU AGGIUNGI
-      card.querySelector(".add-btn").addEventListener("click", (event) => {
-        event.stopPropagation();
-        addToCart(p.id);
-      });
-
-      // 📄 MODAL
-      card.addEventListener("click", () => {
-        openProductModal(p, supermarket);
-      });
-
-      return card;
-    }
-
-    function syncStickyOffset() {
-      const sticky = document.querySelector(".sticky-header");
-      const page = document.querySelector(".products-page");
-
-      if (!sticky || !page) return;
-
-      const navbarHeight = document.querySelector(".top-header")?.offsetHeight || 60;
-      page.style.paddingTop = sticky.offsetHeight + navbarHeight + "px";
-    }
-
-    window.addEventListener("load", syncStickyOffset);
-    window.addEventListener("resize", syncStickyOffset);
-
-
-
-let ticking = false;
-
-window.addEventListener("scroll", () => {
-  if (window.innerWidth >= 480) return; // DESKTOP: disabilita virtual scroll
-
-  if (!ticking) {
-    requestAnimationFrame(() => {
-      updateVisibleRange();
-      ticking = false;
-    });
-    ticking = true;
+  if (!res?.ok) {
+    const err = await res?.json().catch(() => ({}));
+    showToast(err?.detail || "Errore durante l'aggiunta", false);
+    return;
   }
-});
-    window.addEventListener("resize", renderProducts);
+
+  showToast("Aggiunto alla lista spesa");
+}
+
+function showToast(message, success = true) {
+  const toast = $("#toast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.style.background = success ? "#16a34a" : "#dc2626";
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 2200);
+}
+
+function paintSkeletons() {
+  const grid = $("#products-grid");
+  if (!grid) return;
+  grid.innerHTML = Array.from({ length: 12 }).map(() => `
+    <article class="product-card skeleton-card">
+      <div class="card-image-shell"></div>
+      <div class="product-body">
+        <div class="product-name">Caricamento...</div>
+        <div class="product-unit">—</div>
+      </div>
+    </article>
+  `).join("");
+}

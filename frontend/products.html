@@ -2,16 +2,15 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SmartGrocery - Dashboard</title>
-    <link rel="stylesheet" href="css/navbar.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartGrocery - Prodotti</title>
+  <link rel="stylesheet" href="css/navbar.css">
   <link rel="stylesheet" href="css/products.css">
-      <link rel="stylesheet" href="css/modal.css">
+  <link rel="stylesheet" href="css/modal.css">
 </head>
 <body data-page="products">
 <header class="top-header">
   <div class="header-inner">
-
     <div class="header-left">
       <div class="logo-icon">
         <svg class="cart-svg" viewBox="0 0 24 24" fill="none" stroke="white">
@@ -32,61 +31,119 @@
       <button class="nav-pill" data-tab="supermarkets" onclick="navigate('supermarkets')">Negozi</button>
       <button class="nav-pill" data-tab="profile" onclick="navigate('profile')">Profilo</button>
     </nav>
-
   </div>
 </header>
-<div class="products-page">
-    <div class="sticky-header">
-        <h1 class="shopping-title">Prodotti</h1>
 
-        <input id="search-input" class="search-bar" type="text" placeholder="Cerca prodotti...">
-
-        <div class="store-filter-bar">
-            <select id="store-filter" class="store-select">
-                <option value="all">Tutti i negozi</option>
-            </select>
-        </div>
-
-        <div class="category-bar">
-            <button class="cat-pill active" data-cat="all">All</button>
-            <button class="cat-pill" data-cat="sale">In Sconto</button>
-            <button class="cat-pill" data-cat="favorites">Preferiti</button>
-
-            <button class="cat-pill" data-cat="Frutta">Frutta</button>
-            <button class="cat-pill" data-cat="Verdura">Verdura</button>
-            <button class="cat-pill" data-cat="Dispensa">Dispensa</button>
-            <button class="cat-pill" data-cat="Pasta">Pasta</button>
-            <button class="cat-pill" data-cat="Colazione">Colazione</button>
-            <button class="cat-pill" data-cat="Bevande">Bevande</button>
-            <button class="cat-pill" data-cat="Latticini">Latticini</button>
-            <button class="cat-pill" data-cat="Forno">Forno</button>
-            <button class="cat-pill" data-cat="Pesce">Pesce</button>
-            <button class="cat-pill" data-cat="Carne">Carne</button>
-            <button class="cat-pill" data-cat="Dolci">Dolci</button>
-            <button class="cat-pill" data-cat="Igiene">Igiene</button>
-            <button class="cat-pill" data-cat="Surgelati">Surgelati</button>
-        </div>
+<main class="products-page">
+  <section class="products-hero">
+    <div class="hero-copy">
+      <span class="eyebrow">Catalogo intelligente</span>
+      <h1>Prodotti, offerte e volantini in un'unica vista.</h1>
+      <p>Trova velocemente cosa conviene comprare, da quale supermercato e in quale pagina del volantino.</p>
     </div>
 
-    <!-- 🔥 virtual scroll container CORRETTO -->
-    <div id="virtual-container" style="position: relative;">
-        <div id="products-grid" class="products-grid" style="position:absolute; top:0; left:0; width:100%;">
-            <div id="spacer-top"></div>
-            <div id="spacer-bottom"></div>
-        </div>
+    <div class="hero-stats" aria-label="Statistiche catalogo">
+      <div class="stat-card">
+        <span id="stat-total" class="stat-value">—</span>
+        <span class="stat-label">prodotti</span>
+      </div>
+      <div class="stat-card sale">
+        <span id="stat-sale" class="stat-value">—</span>
+        <span class="stat-label">in sconto</span>
+      </div>
+      <div class="stat-card">
+        <span id="stat-stores" class="stat-value">—</span>
+        <span class="stat-label">negozi</span>
+      </div>
     </div>
-</div>
+  </section>
 
+  <section class="product-workspace">
+    <aside class="products-sidebar">
+      <div class="filter-card search-card">
+        <label for="search-input">Cerca prodotto</label>
+        <div class="search-shell">
+          <span>⌕</span>
+          <input id="search-input" type="text" placeholder="Es. pollo, gelato, Rio Mare...">
+        </div>
+      </div>
+
+      <div class="filter-card">
+        <label for="store-filter">Supermercato</label>
+        <select id="store-filter" class="smart-select">
+          <option value="all">Tutti i negozi</option>
+        </select>
+      </div>
+
+      <div class="filter-card">
+        <label for="sort-select">Ordina per</label>
+        <select id="sort-select" class="smart-select">
+          <option value="best-discount">Miglior sconto</option>
+          <option value="flyer-page">Pagina volantino</option>
+          <option value="price-asc">Prezzo crescente</option>
+          <option value="price-desc">Prezzo decrescente</option>
+          <option value="name-asc">Nome A-Z</option>
+          <option value="category">Categoria</option>
+        </select>
+      </div>
+
+      <div class="filter-card desktop-only">
+        <div class="filter-title">Scorciatoie</div>
+        <div class="quick-filter-list">
+          <button class="quick-filter active" data-mode="all">Tutti</button>
+          <button class="quick-filter" data-mode="sale">Solo offerte</button>
+          <button class="quick-filter" data-mode="lidl-plus">Lidl Plus</button>
+          <button class="quick-filter" data-mode="favorites">Preferiti</button>
+        </div>
+      </div>
+
+      <div class="filter-card desktop-only deal-card">
+        <div class="filter-title">Top occasione</div>
+        <div id="best-deal-box" class="best-deal-box">Caricamento...</div>
+      </div>
+    </aside>
+
+    <section class="products-content">
+      <div class="mobile-filter-bar">
+        <button class="quick-filter active" data-mode="all">Tutti</button>
+        <button class="quick-filter" data-mode="sale">Offerte</button>
+        <button class="quick-filter" data-mode="lidl-plus">Lidl Plus</button>
+        <button class="quick-filter" data-mode="favorites">Preferiti</button>
+      </div>
+
+      <div class="category-bar" id="category-bar">
+        <button class="cat-pill active" data-cat="all">Tutte le categorie</button>
+      </div>
+
+      <div class="results-header">
+        <div>
+          <span id="result-count" class="result-count">—</span>
+          <span class="result-label">risultati</span>
+        </div>
+        <div id="active-filter-label" class="active-filter-label">Tutto il catalogo</div>
+      </div>
+
+      <div id="products-grid" class="products-grid" aria-live="polite"></div>
+
+      <div id="empty-state" class="empty-state hidden">
+        <div class="empty-icon">🛒</div>
+        <h3>Nessun prodotto trovato</h3>
+        <p>Prova a cambiare ricerca, negozio o categoria.</p>
+      </div>
+
+      <button id="load-more-btn" class="load-more-btn hidden">Mostra altri prodotti</button>
+    </section>
+  </section>
+</main>
 
 <div id="toast" class="toast"></div>
-
 <div id="bottom-bar-container"></div>
+
 <script>
 fetch("bottom-bar.html")
   .then(r => r.text())
   .then(html => {
     document.getElementById("bottom-bar-container").innerHTML = html;
-
     const script = document.createElement("script");
     script.type = "module";
     script.src = "js/quick-actions.js";
@@ -98,6 +155,5 @@ fetch("bottom-bar.html")
 <script src="js/navbar.js"></script>
 <script type="module" src="js/modal-loader.js"></script>
 <script type="module" src="js/products.js"></script>
-
 </body>
 </html>
