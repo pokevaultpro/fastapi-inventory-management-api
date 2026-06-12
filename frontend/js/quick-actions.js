@@ -1,15 +1,12 @@
-console.log("BOTTOM BAR SCRIPT LOADED");
-
 function renderQuickActions() {
   const currentPage = document.body.dataset.page;
 
   const actions = [
     {
-    id: "home",
-    label: "Home",
-    color: "green",
-    icon: "M3 9.75L12 3l9 6.75V21a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1V9.75z"
-
+      id: "home",
+      label: "Home",
+      color: "green",
+      icon: "M3 9.75L12 3l9 6.75V21a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1V9.75z"
     },
     {
       id: "list",
@@ -22,6 +19,12 @@ function renderQuickActions() {
       label: "Prodotti",
       color: "blue",
       icon: "M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
+    },
+    {
+      id: "history",
+      label: "Storico",
+      color: "teal",
+      icon: "M12 8v4l3 3M21 12a9 9 0 11-3.2-6.9M21 3v6h-6"
     },
     {
       id: "recipes",
@@ -44,8 +47,8 @@ function renderQuickActions() {
   ];
 
   const visibleActions = actions.filter(a => a.id !== currentPage);
-
   const container = document.getElementById("bottom-bar");
+  if (!container) return;
 
   container.innerHTML = visibleActions.map(a => `
     <button class="action-btn-bottom" data-id="${a.id}" onclick="navigate('${a.id}')">

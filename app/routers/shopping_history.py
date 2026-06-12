@@ -1,9 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
-from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from __future__ import annotations
+
+from collections import defaultdict
+from datetime import datetime, timedelta
 from typing import Annotated, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 from starlette import status
-from datetime import datetime
 
 from app.database import SessionLocal
 from app.routers.auth import get_current_user
@@ -14,6 +18,7 @@ router = APIRouter(
     tags=["shopping-history"]
 )
 
+
 def get_db():
     db = SessionLocal()
     try:
@@ -21,120 +26,424 @@ def get_db():
     finally:
         db.close()
 
+
 db_dependency = Annotated[Session, Depends(get_db)]
 user_dependency = Annotated[dict, Depends(get_current_user)]
 
-@router.get("", status_code=status.HTTP_200_OK)
-async def get_shopping_history(user: user_dependency, db: db_dependency):
-    owner_id = user.get("id")
+
+class HistoryRestoreResponse(BaseModel):
+    history_id: int
+    restored_count: int
+    merged_count: int
+    missing_count: int
+    previous_total: float
+    current_total: float
+    total_delta: float
+    price_changes: list[dict]
+    missing: list[dict]
+    restored_product_ids: list[int]
+    message: str
+
+
+def _parse_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def _round_money(value: float | int | None) -> float:
+    return round(float(value or 0), 2)
+
+
+def _product_current_price(product: Products) -> float:
+    return float(product.discounted_price if product.discounted_price is not None else product.original_price)
+
+
+def _history_owned_query(db: Session, owner_id: int):
+    return db.query(ShoppingHistory).filter(ShoppingHistory.user_id == owner_id)
+
+
+def _ensure_user(db: Session, owner_id: int) -> Users:
     user_model = db.query(Users).filter(Users.id == owner_id).first()
     if not user_model:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    shopping_history_model = db.query(ShoppingHistory).filter(ShoppingHistory.user_id == owner_id).all()
-    return shopping_history_model
+    return user_model
+
+
+def _filter_histories_by_days(histories: list[ShoppingHistory], days: int | None) -> list[ShoppingHistory]:
+    if not days:
+        return histories
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    return [h for h in histories if (_parse_datetime(h.created_at) or datetime.min) >= cutoff]
+
+
+@router.get("", status_code=status.HTTP_200_OK)
+async def get_shopping_history(
+    user: user_dependency,
+    db: db_dependency,
+    limit: Optional[int] = Query(default=None, gt=0, le=200),
+):
+    owner_id = user.get("id")
+    _ensure_user(db, owner_id)
+
+    query = _history_owned_query(db, owner_id).order_by(ShoppingHistory.created_at.desc())
+    if limit is not None:
+        query = query.limit(limit)
+    return query.all()
+
+
+@router.get("/recent", status_code=status.HTTP_200_OK)
+async def get_recent_shopping_histories(
+    user: user_dependency,
+    db: db_dependency,
+    limit: int = Query(default=5, gt=0, le=20),
+):
+    owner_id = user.get("id")
+    _ensure_user(db, owner_id)
+
+    histories = (
+        _history_owned_query(db, owner_id)
+        .order_by(ShoppingHistory.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    result = []
+    for history in histories:
+        preview_items = (
+            db.query(ShoppingHistoryItem)
+            .filter(ShoppingHistoryItem.history_id == history.id)
+            .limit(5)
+            .all()
+        )
+        result.append({
+            "id": history.id,
+            "created_at": history.created_at,
+            "total_price": _round_money(history.total_price),
+            "total_items": history.total_items,
+            "preview_items": [
+                {
+                    "id": item.id,
+                    "product_id": item.product_id,
+                    "name": item.name,
+                    "image": item.image,
+                    "quantity": item.quantity,
+                    "price_paid": _round_money(item.price_paid),
+                    "category": item.category,
+                    "supermarket_name": item.supermarket_name,
+                }
+                for item in preview_items
+            ],
+        })
+    return result
+
+
+@router.get("/stats", status_code=status.HTTP_200_OK)
+@router.get("/stats/summary", status_code=status.HTTP_200_OK)
+async def get_shopping_history_stats(
+    user: user_dependency,
+    db: db_dependency,
+    days: Optional[int] = Query(default=None, gt=0, le=3650),
+):
+    owner_id = user.get("id")
+    _ensure_user(db, owner_id)
+
+    histories = (
+        _history_owned_query(db, owner_id)
+        .order_by(ShoppingHistory.created_at.asc())
+        .all()
+    )
+    histories = _filter_histories_by_days(histories, days)
+
+    history_ids = [h.id for h in histories]
+    if not history_ids:
+        return {
+            "overview": {
+                "trips_count": 0,
+                "total_spent": 0,
+                "total_items": 0,
+                "average_trip": 0,
+                "average_item_price": 0,
+                "discounted_lines": 0,
+                "estimated_savings": 0,
+            },
+            "monthly": [],
+            "category_breakdown": [],
+            "supermarket_breakdown": [],
+            "top_products": [],
+            "latest": [],
+            "days": days,
+        }
+
+    items = (
+        db.query(ShoppingHistoryItem)
+        .filter(ShoppingHistoryItem.history_id.in_(history_ids))
+        .all()
+    )
+
+    history_by_id = {h.id: h for h in histories}
+
+    total_spent = sum(float(h.total_price or 0) for h in histories)
+    total_items = sum(int(h.total_items or 0) for h in histories)
+    trips_count = len(histories)
+    average_trip = total_spent / trips_count if trips_count else 0
+    average_item_price = total_spent / total_items if total_items else 0
+
+    monthly: dict[str, dict] = defaultdict(lambda: {"period": "", "total": 0.0, "trips": 0, "items": 0})
+    for history in histories:
+        dt = _parse_datetime(history.created_at)
+        period = dt.strftime("%Y-%m") if dt else "Sconosciuto"
+        monthly[period]["period"] = period
+        monthly[period]["total"] += float(history.total_price or 0)
+        monthly[period]["trips"] += 1
+        monthly[period]["items"] += int(history.total_items or 0)
+
+    category_stats: dict[str, dict] = defaultdict(lambda: {"category": "", "total": 0.0, "quantity": 0, "lines": 0})
+    supermarket_stats: dict[str, dict] = defaultdict(lambda: {"supermarket": "", "total": 0.0, "quantity": 0, "lines": 0})
+    product_stats: dict[str, dict] = defaultdict(lambda: {"name": "", "total": 0.0, "quantity": 0, "lines": 0, "image": None, "category": None})
+
+    estimated_savings = 0.0
+    discounted_lines = 0
+
+    for item in items:
+        qty = int(item.quantity or 1)
+        line_total = float(item.price_paid or 0) * qty
+
+        category = item.category or "Senza categoria"
+        category_stats[category]["category"] = category
+        category_stats[category]["total"] += line_total
+        category_stats[category]["quantity"] += qty
+        category_stats[category]["lines"] += 1
+
+        supermarket = item.supermarket_name or "N/D"
+        supermarket_stats[supermarket]["supermarket"] = supermarket
+        supermarket_stats[supermarket]["total"] += line_total
+        supermarket_stats[supermarket]["quantity"] += qty
+        supermarket_stats[supermarket]["lines"] += 1
+
+        product_key = f"{item.name}|{item.unit or ''}|{item.supermarket_name or ''}"
+        product_stats[product_key]["name"] = item.name
+        product_stats[product_key]["total"] += line_total
+        product_stats[product_key]["quantity"] += qty
+        product_stats[product_key]["lines"] += 1
+        product_stats[product_key]["image"] = product_stats[product_key]["image"] or item.image
+        product_stats[product_key]["category"] = product_stats[product_key]["category"] or item.category
+
+        if item.was_discounted:
+            discounted_lines += 1
+            if item.product_id:
+                product = db.query(Products).filter(Products.id == item.product_id).first()
+                if product and product.original_price is not None:
+                    original_subtotal = float(product.original_price) * qty
+                    estimated_savings += max(0.0, original_subtotal - line_total)
+
+    latest_histories = sorted(histories, key=lambda h: _parse_datetime(h.created_at) or datetime.min, reverse=True)[:5]
+    latest = []
+    for history in latest_histories:
+        preview = [i for i in items if i.history_id == history.id][:5]
+        latest.append({
+            "id": history.id,
+            "created_at": history.created_at,
+            "total_price": _round_money(history.total_price),
+            "total_items": history.total_items,
+            "preview_items": [
+                {
+                    "id": item.id,
+                    "product_id": item.product_id,
+                    "name": item.name,
+                    "image": item.image,
+                    "quantity": item.quantity,
+                    "price_paid": _round_money(item.price_paid),
+                    "category": item.category,
+                    "supermarket_name": item.supermarket_name,
+                }
+                for item in preview
+            ],
+        })
+
+    def sorted_rounded(values, sort_key="total", limit=None):
+        rows = sorted(values, key=lambda x: x.get(sort_key, 0), reverse=True)
+        if limit:
+            rows = rows[:limit]
+        for row in rows:
+            if "total" in row:
+                row["total"] = _round_money(row["total"])
+        return rows
+
+    monthly_rows = sorted(monthly.values(), key=lambda x: x["period"])
+    for row in monthly_rows:
+        row["total"] = _round_money(row["total"])
+
+    return {
+        "overview": {
+            "trips_count": trips_count,
+            "total_spent": _round_money(total_spent),
+            "total_items": total_items,
+            "average_trip": _round_money(average_trip),
+            "average_item_price": _round_money(average_item_price),
+            "discounted_lines": discounted_lines,
+            "estimated_savings": _round_money(estimated_savings),
+        },
+        "monthly": monthly_rows,
+        "category_breakdown": sorted_rounded(list(category_stats.values()), limit=10),
+        "supermarket_breakdown": sorted_rounded(list(supermarket_stats.values()), limit=10),
+        "top_products": sorted_rounded(list(product_stats.values()), limit=12),
+        "latest": latest,
+        "days": days,
+    }
+
 
 @router.get("/{shopping_history_id}", status_code=status.HTTP_200_OK)
-async def get_shopping_history_by_id(user: user_dependency, db: db_dependency, shopping_history_id: int=Path(gt=0)):
-    shopping_history_model = (db.query(ShoppingHistory).filter(ShoppingHistory.id == shopping_history_id)
-                              .filter(ShoppingHistory.user_id == user.get("id")).first())
+async def get_shopping_history_by_id(user: user_dependency, db: db_dependency, shopping_history_id: int = Path(gt=0)):
+    shopping_history_model = (
+        db.query(ShoppingHistory)
+        .filter(ShoppingHistory.id == shopping_history_id)
+        .filter(ShoppingHistory.user_id == user.get("id"))
+        .first()
+    )
     if shopping_history_model is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopping History not found")
     return shopping_history_model
 
+
 @router.get("/{shopping_history_id}/items", status_code=status.HTTP_200_OK)
-async def get_shopping_history_items(user: user_dependency, db: db_dependency, shopping_history_id: int=Path(gt=0)):
-    shopping_history_model = (db.query(ShoppingHistory).filter(ShoppingHistory.id == shopping_history_id)
-                              .filter(ShoppingHistory.user_id == user.get("id")).first())
+async def get_shopping_history_items(user: user_dependency, db: db_dependency, shopping_history_id: int = Path(gt=0)):
+    shopping_history_model = (
+        db.query(ShoppingHistory)
+        .filter(ShoppingHistory.id == shopping_history_id)
+        .filter(ShoppingHistory.user_id == user.get("id"))
+        .first()
+    )
     if shopping_history_model is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopping History not found")
 
-    shopping_history_item_model = (db.query(ShoppingHistoryItem).filter
-                                   (ShoppingHistoryItem.history_id == shopping_history_id)
-                                   .all())
-    return shopping_history_item_model
+    return (
+        db.query(ShoppingHistoryItem)
+        .filter(ShoppingHistoryItem.history_id == shopping_history_id)
+        .all()
+    )
 
-@router.post("/{shopping_history_id}/restore-cart", status_code=status.HTTP_201_CREATED)
-async def shopping_history_restore_cart(user: user_dependency, db: db_dependency, shopping_history_id: int=Path(gt=0)):
+
+@router.post("/{shopping_history_id}/restore-cart", status_code=status.HTTP_201_CREATED, response_model=HistoryRestoreResponse)
+async def shopping_history_restore_cart(
+    user: user_dependency,
+    db: db_dependency,
+    shopping_history_id: int = Path(gt=0),
+    clear_existing: bool = Query(default=False),
+    merge_duplicates: bool = Query(default=True),
+):
     owner_id = user.get("id")
-    shopping_history_model = (db.query(ShoppingHistory).filter(ShoppingHistory.id == shopping_history_id)
-                              .filter(ShoppingHistory.user_id == owner_id).first())
+    shopping_history_model = (
+        db.query(ShoppingHistory)
+        .filter(ShoppingHistory.id == shopping_history_id)
+        .filter(ShoppingHistory.user_id == owner_id)
+        .first()
+    )
     if shopping_history_model is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopping History not found")
 
-    shopping_history_item_model = (db.query(ShoppingHistoryItem).filter
-                                   (ShoppingHistoryItem.history_id == shopping_history_id)
-                                   .all())
+    shopping_history_items = (
+        db.query(ShoppingHistoryItem)
+        .filter(ShoppingHistoryItem.history_id == shopping_history_id)
+        .all()
+    )
+
+    if clear_existing:
+        db.query(Cart).filter(Cart.owner_id == owner_id).delete(synchronize_session=False)
+        db.flush()
+
     missing_products = []
-    updated_products = []
-    restored_products = []
-    for item in shopping_history_item_model:
-        product_model = db.query(Products).filter(Products.id == item.product_id).first()
+    price_changes = []
+    restored_product_ids = []
+    restored_count = 0
+    merged_count = 0
+    previous_total = 0.0
+    current_total = 0.0
+
+    for item in shopping_history_items:
+        qty = int(item.quantity or 1)
+        previous_line_total = float(item.price_paid or 0) * qty
+        previous_total += previous_line_total
+
+        product_model = db.query(Products).filter(Products.id == item.product_id).first() if item.product_id else None
         if product_model is None:
             missing_products.append({
-                "id": item.product_id,
+                "product_id": item.product_id,
                 "name": item.name,
+                "quantity": qty,
+                "price_paid": _round_money(item.price_paid),
                 "category": item.category,
-                "original_price": item.price_paid,
-                "unit": item.unit,
-                "supermarket_id": item.supermarket_id,
-                "aisle_order": item.aisle_order,
-                "image": item.image,
-                "calories": item.calories,
-                "fat": item.fat,
-                "carbs": item.carbs,
-                "protein": item.protein
+                "supermarket_name": item.supermarket_name,
             })
             continue
-        changed = ((product_model.name != item.name) or
-                   (product_model.category != item.category) or
-                   (product_model.image != item.image) or
-                   (product_model.unit != item.unit) or
-                   (product_model.supermarket_id != item.supermarket_id) or
-                   (product_model.original_price != item.price_paid and not item.was_discounted))
-        if changed:
-            updated_products.append({
-                "id": item.product_id,
-                "old": {
-                    "name": item.name,
-                    "category": item.category,
-                    "unit": item.unit,
-                    "supermarket_id": item.supermarket_id,
-                    "image": item.image,
-                    "original_price": item.price_paid,
-                },
-                "new": {
-                    "name": product_model.name,
-                    "category": product_model.category,
-                    "unit": product_model.unit,
-                    "supermarket_id": product_model.supermarket_id,
-                    "image": product_model.image,
-                    "original_price": product_model.original_price
-                },
-                "changed_fields": {
-                    "name": product_model.name != item.name,
-                    "category": product_model.category != item.category,
-                    "unit": product_model.unit != item.unit,
-                    "supermarket_id": product_model.supermarket_id != item.supermarket_id,
-                    "image": product_model.image != item.image,
-                    "original_price": (item.price_paid != product_model.original_price and not item.was_discounted)
-                }
+
+        current_price = _product_current_price(product_model)
+        current_line_total = current_price * qty
+        current_total += current_line_total
+
+        if abs(current_price - float(item.price_paid or 0)) >= 0.01:
+            price_changes.append({
+                "product_id": product_model.id,
+                "name": product_model.name,
+                "quantity": qty,
+                "old_unit_price": _round_money(item.price_paid),
+                "current_unit_price": _round_money(current_price),
+                "old_subtotal": _round_money(previous_line_total),
+                "current_subtotal": _round_money(current_line_total),
+                "delta": _round_money(current_line_total - previous_line_total),
+                "image": product_model.image or item.image,
             })
 
-        cart_model = Cart(
-            product_id = item.product_id,
-            quantity = item.quantity,
-            owner_id = owner_id,
-            checked = False
+        existing_cart_item = (
+            db.query(Cart)
+            .filter(Cart.owner_id == owner_id)
+            .filter(Cart.product_id == product_model.id)
+            .first()
         )
-        db.add(cart_model)
-        restored_products.append(product_model.id)
+
+        if existing_cart_item and merge_duplicates:
+            existing_cart_item.quantity = int(existing_cart_item.quantity or 0) + qty
+            existing_cart_item.checked = False
+            merged_count += 1
+        else:
+            db.add(Cart(
+                product_id=product_model.id,
+                quantity=qty,
+                owner_id=owner_id,
+                checked=False,
+            ))
+            restored_count += 1
+
+        restored_product_ids.append(product_model.id)
+
     db.commit()
-    return {"restored": restored_products, "updated": updated_products, "missing": missing_products}
+
+    return {
+        "history_id": shopping_history_id,
+        "restored_count": restored_count,
+        "merged_count": merged_count,
+        "missing_count": len(missing_products),
+        "previous_total": _round_money(previous_total),
+        "current_total": _round_money(current_total),
+        "total_delta": _round_money(current_total - previous_total),
+        "price_changes": price_changes,
+        "missing": missing_products,
+        "restored_product_ids": restored_product_ids,
+        "message": "Lista ripristinata nel carrello con i prezzi attuali dei prodotti.",
+    }
+
 
 @router.delete("/{shopping_history_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_shopping_history(user: user_dependency, db: db_dependency, shopping_history_id: int):
-    shopping_history_model = (db.query(ShoppingHistory).filter(ShoppingHistory.id == shopping_history_id)
-                              .filter(ShoppingHistory.user_id == user.get("id")).first())
+    shopping_history_model = (
+        db.query(ShoppingHistory)
+        .filter(ShoppingHistory.id == shopping_history_id)
+        .filter(ShoppingHistory.user_id == user.get("id"))
+        .first()
+    )
     if shopping_history_model is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopping History not found")
     db.delete(shopping_history_model)

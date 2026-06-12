@@ -1,21 +1,17 @@
 #bottom-bar-container {
-display: none;
+  display: none;
 }
 
 @media (max-width: 768px) {
+  #bottom-bar-container {
+    display: block;
+  }
 
-#bottom-bar-container {
-display: block;
-}
-#bottom-bar-container,
-#bottom-bar-container * {
-  box-sizing: border-box;
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
-}
-#bottom-bar-container {
-  margin: 0;
-  padding: 0;
-}
+  #bottom-bar-container,
+  #bottom-bar-container * {
+    box-sizing: border-box;
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+  }
 
   .bottom-bar {
     position: fixed;
@@ -23,49 +19,58 @@ display: block;
     left: 0;
     right: 0;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    padding: 8px 0;
-    background: white;
+    grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
+    gap: 0;
+    padding: 7px 4px calc(7px + env(safe-area-inset-bottom));
+    background: rgba(255,255,255,.96);
     border-top: 1px solid #e5e7eb;
     z-index: 1000;
+    backdrop-filter: blur(18px);
+    box-shadow: 0 -14px 34px rgba(15,23,42,.08);
   }
 
   .action-btn-bottom {
-    height: 70px;
+    min-width: 0;
+    height: 66px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 5px;
     background: transparent;
     border: none;
+    padding: 0 2px;
   }
 
-.bottom-bar .action-icon {
-  margin-bottom: 6px;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
+  .bottom-bar .action-icon {
+    width: 29px;
+    height: 29px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
 
-.bottom-bar .icon-svg {
-  width: 20px;
-  height: 20px;
-  stroke: currentColor;
-}
-
+  .bottom-bar .icon-svg {
+    width: 19px;
+    height: 19px;
+    stroke: currentColor;
+  }
 
   .action-label-bottom {
-    font-size: 12px;
+    font-size: 10.5px;
+    font-weight: 800;
+    color: #334155;
+    max-width: 56px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-.bottom-bar .action-icon.color-green { background: #22c55e20; color: #22c55e; }
-.bottom-bar .action-icon.color-blue { background: #3b82f620; color: #3b82f6; }
-.bottom-bar .action-icon.color-orange { background: #f9731620; color: #f97316; }
-.bottom-bar .action-icon.color-purple { background: #8b5cf620; color: #8b5cf6; }
-.bottom-bar .action-icon.color-gray { background: #6b728020; color: #6b7280; }
-
-
+  .bottom-bar .action-icon.color-green { background: #22c55e20; color: #22c55e; }
+  .bottom-bar .action-icon.color-blue { background: #3b82f620; color: #3b82f6; }
+  .bottom-bar .action-icon.color-orange { background: #f9731620; color: #f97316; }
+  .bottom-bar .action-icon.color-purple { background: #8b5cf620; color: #8b5cf6; }
+  .bottom-bar .action-icon.color-gray { background: #6b728020; color: #6b7280; }
+  .bottom-bar .action-icon.color-teal { background: #14b8a620; color: #0f766e; }
 }

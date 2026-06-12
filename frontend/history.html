@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cronologia Spesa - SmartGrocery</title>
+  <link rel="stylesheet" href="css/navbar.css">
+  <link rel="stylesheet" href="css/history.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body data-page="history">
+<header class="top-header">
+  <div class="header-inner">
+    <div class="header-left">
+      <div class="logo-icon">
+        <svg class="cart-svg" viewBox="0 0 24 24" fill="none" stroke="white">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.5 3h2l1.6 9.5a2 2 0 002 1.7h8.4a2 2 0 001.9-1.4l2.1-6.8H6.1" />
+          <circle cx="9" cy="19" r="1.5" />
+          <circle cx="17" cy="19" r="1.5" />
+        </svg>
+      </div>
+      <span class="header-logo">SmartGrocery</span>
+    </div>
+    <nav class="header-right">
+      <button class="nav-pill" data-tab="home" onclick="navigate('home')">Home</button>
+      <button class="nav-pill" data-tab="list" onclick="navigate('list')">List</button>
+      <button class="nav-pill" data-tab="products" onclick="navigate('products')">Prodotti</button>
+      <button class="nav-pill" data-tab="history" onclick="navigate('history')">Storico</button>
+      <button class="nav-pill" data-tab="recipes" onclick="navigate('recipes')">Ricette</button>
+      <button class="nav-pill" data-tab="supermarkets" onclick="navigate('supermarkets')">Negozi</button>
+      <button class="nav-pill" data-tab="profile" onclick="navigate('profile')">Profilo</button>
+    </nav>
+  </div>
+</header>
+
+<main class="history-page">
+  <section class="hero-panel">
+    <div>
+      <p class="eyebrow">Analisi personale</p>
+      <h1>Cronologia della spesa</h1>
+      <p class="hero-copy">Tutto quello che hai finalizzato: statistiche, trend, categorie, supermercati e restore intelligente delle liste.</p>
+    </div>
+    <div class="hero-actions">
+      <select id="range-select" class="range-select">
+        <option value="all">Tutto lo storico</option>
+        <option value="30">Ultimi 30 giorni</option>
+        <option value="90">Ultimi 90 giorni</option>
+        <option value="365">Ultimo anno</option>
+      </select>
+      <button id="refresh-btn" class="ghost-btn">Aggiorna</button>
+    </div>
+  </section>
+
+  <section class="kpi-grid" id="kpi-grid">
+    <div class="kpi-card skeleton"></div>
+    <div class="kpi-card skeleton"></div>
+    <div class="kpi-card skeleton"></div>
+    <div class="kpi-card skeleton"></div>
+  </section>
+
+  <section class="dashboard-grid">
+    <article class="analytics-card trend-card">
+      <div class="card-header">
+        <div>
+          <p class="card-kicker">Trend</p>
+          <h2>Spesa nel tempo</h2>
+        </div>
+        <span class="soft-badge" id="trend-badge">mensile</span>
+      </div>
+      <canvas id="monthly-chart" height="220"></canvas>
+      <div id="monthly-empty" class="empty-mini">Finalizza qualche spesa per vedere il grafico.</div>
+    </article>
+
+    <article class="analytics-card recent-card">
+      <div class="card-header">
+        <div>
+          <p class="card-kicker">Restore</p>
+          <h2>Ultime 5 liste</h2>
+        </div>
+        <label class="clear-toggle">
+          <input type="checkbox" id="clear-before-restore">
+          <span>Sostituisci carrello</span>
+        </label>
+      </div>
+      <div id="recent-lists" class="recent-lists"></div>
+    </article>
+
+    <article class="analytics-card">
+      <div class="card-header">
+        <div>
+          <p class="card-kicker">Categorie</p>
+          <h2>Dove spendi di più</h2>
+        </div>
+      </div>
+      <div id="category-bars" class="bars-list"></div>
+    </article>
+
+    <article class="analytics-card">
+      <div class="card-header">
+        <div>
+          <p class="card-kicker">Negozi</p>
+          <h2>Distribuzione supermercati</h2>
+        </div>
+      </div>
+      <canvas id="supermarket-chart" height="220"></canvas>
+      <div id="supermarket-legend" class="legend-list"></div>
+    </article>
+  </section>
+
+  <section class="analytics-card full-width top-products-card">
+    <div class="card-header">
+      <div>
+        <p class="card-kicker">Abitudini</p>
+        <h2>Prodotti più acquistati</h2>
+      </div>
+      <span class="soft-badge">per quantità</span>
+    </div>
+    <div id="top-products" class="top-products"></div>
+  </section>
+</main>
+
+<div id="restore-toast" class="restore-toast" hidden></div>
+<div id="bottom-bar-container"></div>
+<script>
+fetch("bottom-bar.html")
+  .then(r => r.text())
+  .then(html => {
+    document.getElementById("bottom-bar-container").innerHTML = html;
+    const script = document.createElement("script");
+    script.type = "module";
+    script.src = "js/quick-actions.js";
+    document.body.appendChild(script);
+  });
+</script>
+<script src="js/api.js"></script>
+<script type="module" src="js/history.js"></script>
+<script src="js/navbar.js"></script>
+</body>
+</html>
