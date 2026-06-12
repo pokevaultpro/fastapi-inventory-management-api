@@ -20,20 +20,70 @@ async function api(url, options = {}) {
     return null;
   }
   if (res.status === 403) {
-    document.querySelector(".admin-desktop").innerHTML = `<section class="admin-hero"><div><p class="eyebrow">Accesso negato</p><h1>Solo admin</h1><p>Questa pagina è disponibile solo per utenti con ruolo admin.</p></div></section>`;
+    const desktop = document.querySelector(".admin-desktop");
+    if (desktop) {
+      desktop.innerHTML = `<section class="admin-hero"><div><p class="eyebrow">Accesso negato</p><h1>Solo admin</h1><p>Questa pagina è disponibile solo per utenti con ruolo admin.</p></div></section>`;
+    }
     return null;
   }
   return res;
 }
 
+async function readError(res, fallback = "Errore sconosciuto") {
+  if (!res) return fallback;
+  try {
+    const data = await res.json();
+
+    if (Array.isArray(data?.detail)) {
+      return data.detail.map(err => {
+        const field = Array.isArray(err.loc) ? err.loc.filter(x => x !== "body").join(".") : "campo";
+        return `${field}: ${err.msg}`;
+      }).join(" · ");
+    }
+
+    if (typeof data?.detail === "string") return data.detail;
+    if (typeof data?.message === "string") return data.message;
+
+    return JSON.stringify(data);
+  } catch {
+    try {
+      return await res.text();
+    } catch {
+      return fallback;
+    }
+  }
+}
+
 const euro = v => Number(v || 0).toLocaleString("it-IT", { style: "currency", currency: "EUR" });
 const img = src => src || "/static/images/placeholder.jpg";
+const valueOrNull = id => {
+  const v = document.getElementById(id)?.value?.trim();
+  return v ? v : null;
+};
+const numberOrNull = id => {
+  const v = document.getElementById(id)?.value;
+  return v === "" || v == null ? null : Number(v);
+};
 
-function toast(msg) {
+function toast(msg, ms = 3000) {
   const el = document.getElementById("admin-toast");
   el.textContent = msg;
   el.classList.add("show");
-  setTimeout(() => el.classList.remove("show"), 2400);
+  setTimeout(() => el.classList.remove("show"), ms);
+}
+
+function showProductError(message) {
+  const box = document.getElementById("product-form-error");
+  if (!box) return toast(message, 6000);
+  box.hidden = false;
+  box.textContent = message;
+}
+
+function clearProductError() {
+  const box = document.getElementById("product-form-error");
+  if (!box) return;
+  box.hidden = true;
+  box.textContent = "";
 }
 
 async function init() {
@@ -56,6 +106,7 @@ function bindForms() {
   document.getElementById("product-form").addEventListener("submit", saveProduct);
   document.getElementById("product-reset-btn").addEventListener("click", resetProductForm);
   document.getElementById("product-admin-search").addEventListener("input", debounce(loadProducts, 250));
+  document.querySelectorAll("#product-form input, #product-form select").forEach(el => el.addEventListener("input", clearProductError));
 
   document.getElementById("supermarket-form").addEventListener("submit", saveSupermarket);
   document.getElementById("supermarket-reset-btn").addEventListener("click", resetSupermarketForm);
@@ -94,7 +145,11 @@ async function loadSupermarkets() {
 
 function renderSupermarketSelect() {
   const select = document.getElementById("product-supermarket");
-  select.innerHTML = state.supermarkets.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join("");
+  if (!state.supermarkets.length) {
+    select.innerHTML = `<option value="">Crea prima un supermercato</option>`;
+    return;
+  }
+  select.innerHTML = `<option value="">Seleziona supermercato *</option>` + state.supermarkets.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join("");
 }
 
 async function loadProducts() {
@@ -110,9 +165,9 @@ function renderProducts() {
     <div class="admin-row">
       <img src="${img(p.image)}" onerror="this.src='/static/images/placeholder.jpg'">
       <div><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.brand || p.category || "")}</small></div>
-      <div>${escapeHtml(p.supermarket_name || "")}<small>${escapeHtml(p.unit || "pz")}</small></div>
+      <div>${escapeHtml(p.supermarket_name || "")}<small>${escapeHtml(p.unit || "pz")} · aisle ${p.aisle_order ?? "n/d"}</small></div>
       <div><b>${euro(p.discounted_price || p.original_price)}</b><small>${p.discounted_price ? `orig. ${euro(p.original_price)}` : ""}</small></div>
-      <div>${p.flyer_page ? `Volantino p.${p.flyer_page}` : ""}</div>
+      <div>${p.flyer_page ? `Volantino p.${p.flyer_page}` : ""}<small>${escapeHtml(p.location || "")}</small></div>
       <div class="row-actions"><button class="edit-btn" data-edit-product="${p.id}">Edit</button><button class="delete-btn" data-delete-product="${p.id}">Del</button></div>
     </div>
   `).join("") || `<div class="empty-state">Nessun prodotto.</div>`;
@@ -124,6 +179,8 @@ function renderProducts() {
 function editProduct(id) {
   const p = state.products.find(x => x.id === id);
   if (!p) return;
+  clearProductError();
+
   document.getElementById("product-id").value = p.id;
   document.getElementById("product-name").value = p.name || "";
   document.getElementById("product-category").value = p.category || "Altro";
@@ -134,8 +191,27 @@ function editProduct(id) {
   document.getElementById("product-supermarket").value = p.supermarket_id || "";
   document.getElementById("product-image").value = p.image || "";
   document.getElementById("product-flyer-page").value = p.flyer_page || "";
+  document.getElementById("product-valid-from").value = normalizeDateInput(p.flyer_valid_from);
+  document.getElementById("product-valid-to").value = normalizeDateInput(p.flyer_valid_to);
+  document.getElementById("product-lidl-plus").checked = Boolean(p.is_lidl_plus);
+  document.getElementById("product-offer-note").value = p.offer_note || "";
+  document.getElementById("product-aisle-order").value = p.aisle_order ?? "";
+  document.getElementById("product-location").value = p.location || "";
+  document.getElementById("product-calories").value = p.calories ?? "";
+  document.getElementById("product-fat").value = p.fat ?? "";
+  document.getElementById("product-carbs").value = p.carbs ?? "";
+  document.getElementById("product-protein").value = p.protein ?? "";
   document.getElementById("product-save-btn").textContent = "Aggiorna prodotto";
+
   window.scrollTo({ top: document.getElementById("panel-products").offsetTop - 80, behavior: "smooth" });
+}
+
+function normalizeDateInput(value) {
+  if (!value) return "";
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
 function resetProductForm() {
@@ -144,36 +220,92 @@ function resetProductForm() {
   document.getElementById("product-category").value = "Altro";
   document.getElementById("product-unit").value = "pz";
   document.getElementById("product-save-btn").textContent = "Salva prodotto";
+  clearProductError();
+}
+
+function buildProductPayload() {
+  const name = valueOrNull("product-name");
+  const category = valueOrNull("product-category") || "Altro";
+  const originalPrice = numberOrNull("product-original");
+  const supermarketId = numberOrNull("product-supermarket");
+
+  if (!name) throw new Error("Manca il nome prodotto.");
+  if (!category) throw new Error("Manca la categoria.");
+  if (!originalPrice || originalPrice <= 0) throw new Error("Il prezzo originale deve essere maggiore di 0.");
+  if (!supermarketId) throw new Error("Devi selezionare un supermercato. Se non c'è, crealo prima nella tab Supermercati.");
+
+  const discounted = numberOrNull("product-discounted");
+
+  if (discounted != null && discounted <= 0) throw new Error("Il prezzo scontato deve essere maggiore di 0 oppure lasciato vuoto.");
+
+  return {
+    name,
+    category,
+    brand: valueOrNull("product-brand"),
+    unit: valueOrNull("product-unit") || "pz",
+    original_price: originalPrice,
+    discounted_price: discounted,
+    supermarket_id: supermarketId,
+    aisle_order: numberOrNull("product-aisle-order") ?? 999,
+    image: valueOrNull("product-image"),
+    flyer_page: numberOrNull("product-flyer-page"),
+    flyer_valid_from: valueOrNull("product-valid-from"),
+    flyer_valid_to: valueOrNull("product-valid-to"),
+    is_lidl_plus: document.getElementById("product-lidl-plus").checked,
+    offer_note: valueOrNull("product-offer-note"),
+    location: valueOrNull("product-location"),
+    calories: numberOrNull("product-calories"),
+    fat: numberOrNull("product-fat"),
+    carbs: numberOrNull("product-carbs"),
+    protein: numberOrNull("product-protein"),
+  };
 }
 
 async function saveProduct(e) {
   e.preventDefault();
+  clearProductError();
+
   const id = document.getElementById("product-id").value;
-  const payload = {
-    name: document.getElementById("product-name").value.trim(),
-    category: document.getElementById("product-category").value.trim() || "Altro",
-    brand: document.getElementById("product-brand").value.trim() || null,
-    unit: document.getElementById("product-unit").value.trim() || "pz",
-    original_price: Number(document.getElementById("product-original").value),
-    discounted_price: document.getElementById("product-discounted").value ? Number(document.getElementById("product-discounted").value) : null,
-    supermarket_id: Number(document.getElementById("product-supermarket").value),
-    aisle_order: 999,
-    image: document.getElementById("product-image").value.trim() || null,
-    flyer_page: document.getElementById("product-flyer-page").value ? Number(document.getElementById("product-flyer-page").value) : null,
-  };
-  const url = id ? `${CONFIG.API_BASE_URL}/admin/products/${id}` : `${CONFIG.API_BASE_URL}/admin/products`;
-  const method = id ? "PUT" : "POST";
-  const res = await api(url, { method, body: JSON.stringify(payload) });
-  if (!res?.ok) return toast("Errore salvataggio prodotto");
-  toast(id ? "Prodotto aggiornato" : "Prodotto creato");
-  resetProductForm();
-  await loadProducts();
+  let payload;
+
+  try {
+    payload = buildProductPayload();
+  } catch (err) {
+    showProductError(err.message || "Controlla i campi del prodotto.");
+    return;
+  }
+
+  const saveBtn = document.getElementById("product-save-btn");
+  saveBtn.disabled = true;
+  saveBtn.textContent = id ? "Aggiorno..." : "Creo...";
+
+  try {
+    const url = id ? `${CONFIG.API_BASE_URL}/admin/products/${id}` : `${CONFIG.API_BASE_URL}/admin/products`;
+    const method = id ? "PUT" : "POST";
+    const res = await api(url, { method, body: JSON.stringify(payload) });
+
+    if (!res?.ok) {
+      const detail = await readError(res, "Errore salvataggio prodotto");
+      showProductError(`Non riesco a salvare il prodotto: ${detail}`);
+      return;
+    }
+
+    toast(id ? "Prodotto aggiornato" : "Prodotto creato");
+    resetProductForm();
+    await loadProducts();
+    await loadAll();
+  } catch (err) {
+    showProductError(`Errore rete/frontend: ${err.message || err}`);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = id ? "Aggiorna prodotto" : "Salva prodotto";
+  }
 }
 
 async function deleteProduct(id) {
   if (!confirm("Eliminare prodotto dal database? Verrà rimosso anche da carrelli/ricette.")) return;
   const res = await api(`${CONFIG.API_BASE_URL}/admin/products/${id}`, { method: "DELETE" });
-  if (!res?.ok) return toast("Errore eliminazione prodotto");
+  if (!res?.ok) return toast(`Errore eliminazione prodotto: ${await readError(res)}`, 5000);
   toast("Prodotto eliminato");
   await loadProducts();
 }
@@ -216,7 +348,7 @@ async function saveSupermarket(e) {
     image: document.getElementById("supermarket-image").value.trim() || null,
   };
   const res = await api(id ? `${CONFIG.API_BASE_URL}/admin/supermarkets/${id}` : `${CONFIG.API_BASE_URL}/admin/supermarkets`, { method: id ? "PUT" : "POST", body: JSON.stringify(payload) });
-  if (!res?.ok) return toast("Errore salvataggio supermercato");
+  if (!res?.ok) return toast(`Errore salvataggio supermercato: ${await readError(res)}`, 5000);
   toast(id ? "Supermercato aggiornato" : "Supermercato creato");
   resetSupermarketForm();
   await loadSupermarkets();
@@ -226,7 +358,7 @@ async function saveSupermarket(e) {
 async function deleteSupermarket(id) {
   const force = confirm("Vuoi eliminare anche tutti i prodotti collegati a questo supermercato? OK = sì, Annulla = prova eliminazione sicura.");
   const res = await api(`${CONFIG.API_BASE_URL}/admin/supermarkets/${id}?force=${force}`, { method: "DELETE" });
-  if (!res?.ok) return toast("Errore eliminazione supermercato");
+  if (!res?.ok) return toast(`Errore eliminazione supermercato: ${await readError(res)}`, 5000);
   toast("Supermercato eliminato");
   await loadSupermarkets();
 }
@@ -257,7 +389,7 @@ async function saveUser(id) {
   const role = document.querySelector(`[data-user-role="${id}"]`).value;
   const is_active = document.querySelector(`[data-user-active="${id}"]`).value === "true";
   const res = await api(`${CONFIG.API_BASE_URL}/admin/users/${id}`, { method: "PUT", body: JSON.stringify({ role, is_active }) });
-  if (!res?.ok) return toast("Errore salvataggio utente");
+  if (!res?.ok) return toast(`Errore salvataggio utente: ${await readError(res)}`, 5000);
   toast("Utente aggiornato");
   await loadUsers();
 }
@@ -317,7 +449,7 @@ async function saveRecipe(e) {
     instructions: document.getElementById("admin-recipe-instructions").value.trim() || null,
   };
   const res = await api(id ? `${CONFIG.API_BASE_URL}/admin/recipes/${id}` : `${CONFIG.API_BASE_URL}/admin/recipes`, { method: id ? "PUT" : "POST", body: JSON.stringify(payload) });
-  if (!res?.ok) return toast("Errore salvataggio ricetta admin");
+  if (!res?.ok) return toast(`Errore salvataggio ricetta admin: ${await readError(res)}`, 5000);
   toast(id ? "Ricetta aggiornata" : "Ricetta creata");
   resetRecipeForm();
   await loadRecipes();
@@ -326,7 +458,7 @@ async function saveRecipe(e) {
 async function deleteRecipe(id) {
   if (!confirm("Eliminare questa ricetta?")) return;
   const res = await api(`${CONFIG.API_BASE_URL}/admin/recipes/${id}`, { method: "DELETE" });
-  if (!res?.ok) return toast("Errore eliminazione ricetta");
+  if (!res?.ok) return toast(`Errore eliminazione ricetta: ${await readError(res)}`, 5000);
   toast("Ricetta eliminata");
   await loadRecipes();
 }

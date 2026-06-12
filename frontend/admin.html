@@ -45,21 +45,52 @@
     </div>
 
     <section class="admin-panel active" id="panel-products">
-      <div class="panel-head"><div><h2>Prodotti</h2><p>Aggiungi, modifica o rimuovi prodotti dal catalogo.</p></div><input id="product-admin-search" placeholder="Cerca prodotti..."></div>
-      <form id="product-form" class="admin-form">
+      <div class="panel-head">
+        <div>
+          <h2>Prodotti</h2>
+          <p>Aggiungi, modifica o rimuovi prodotti dal catalogo. I campi con * sono obbligatori.</p>
+        </div>
+        <input id="product-admin-search" placeholder="Cerca prodotti...">
+      </div>
+
+      <form id="product-form" class="admin-form product-admin-form">
         <input type="hidden" id="product-id">
-        <input id="product-name" placeholder="Nome prodotto" required>
-        <input id="product-category" placeholder="Categoria" value="Altro">
-        <input id="product-brand" placeholder="Marca">
-        <input id="product-unit" placeholder="Unità es. 500 g" value="pz">
-        <input id="product-original" type="number" step="0.01" min="0.01" placeholder="Prezzo" required>
-        <input id="product-discounted" type="number" step="0.01" min="0.01" placeholder="Prezzo scontato">
-        <select id="product-supermarket" required></select>
-        <input id="product-image" placeholder="URL immagine">
-        <input id="product-flyer-page" type="number" min="1" placeholder="Pagina volantino">
-        <button type="submit" class="primary-btn" id="product-save-btn">Salva prodotto</button>
-        <button type="button" class="ghost-btn" id="product-reset-btn">Nuovo</button>
+
+        <div class="form-section-title">Dati base</div>
+        <label>Nome prodotto *<input id="product-name" placeholder="Es. Pane integrale" required></label>
+        <label>Categoria *<input id="product-category" placeholder="Es. Pane e prodotti da forno" value="Altro" required></label>
+        <label>Marca<input id="product-brand" placeholder="Es. Lidl, Barilla..."></label>
+        <label>Unità / formato<input id="product-unit" placeholder="Es. 500 g, 1 L, pz" value="pz"></label>
+        <label>Supermercato *<select id="product-supermarket" required></select></label>
+
+        <div class="form-section-title">Prezzi e ordinamento</div>
+        <label>Prezzo originale *<input id="product-original" type="number" step="0.01" min="0.01" placeholder="Es. 1.99" required></label>
+        <label>Prezzo scontato<input id="product-discounted" type="number" step="0.01" min="0.01" placeholder="Lascia vuoto se non scontato"></label>
+        <label>Aisle order<input id="product-aisle-order" type="number" step="1" placeholder="Es. 10"></label>
+        <label>Posizione nel supermercato<input id="product-location" placeholder="Es. Reparto Pane e prodotti da forno"></label>
+
+        <div class="form-section-title">Volantino e immagine</div>
+        <label>URL immagine<input id="product-image" placeholder="/static/images/products/... oppure https://..."></label>
+        <label>Pagina volantino<input id="product-flyer-page" type="number" min="1" placeholder="Es. 7"></label>
+        <label>Validità da<input id="product-valid-from" type="date"></label>
+        <label>Validità a<input id="product-valid-to" type="date"></label>
+        <label class="checkbox-admin-field"><input id="product-lidl-plus" type="checkbox"> Lidl Plus</label>
+        <label>Nota offerta<input id="product-offer-note" placeholder="Es. solo con app, max 4 pezzi..."></label>
+
+        <div class="form-section-title">Valori nutrizionali</div>
+        <label>Calorie<input id="product-calories" type="number" step="0.1" min="0" placeholder="kcal"></label>
+        <label>Grassi<input id="product-fat" type="number" step="0.1" min="0" placeholder="g"></label>
+        <label>Carboidrati<input id="product-carbs" type="number" step="0.1" min="0" placeholder="g"></label>
+        <label>Proteine<input id="product-protein" type="number" step="0.1" min="0" placeholder="g"></label>
+
+        <div id="product-form-error" class="form-error" hidden></div>
+
+        <div class="form-actions-wide">
+          <button type="submit" class="primary-btn" id="product-save-btn">Salva prodotto</button>
+          <button type="button" class="ghost-btn" id="product-reset-btn">Nuovo</button>
+        </div>
       </form>
+
       <div class="admin-table" id="products-table"></div>
     </section>
 
