@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from app.database import engine, Base
 from app.routers import (auth, products, favorites, supermarkets, recipes, recipe_items,
-                         cart, users, shopping_history, flyer_catalog)
+                         cart, users, shopping_history, flyer_catalog, profile, recipe_smart)
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -66,3 +66,5 @@ app.include_router(cart.router)
 app.include_router(users.router)
 app.include_router(shopping_history.router)
 app.include_router(flyer_catalog.router)
+app.include_router(profile.router)
+app.include_router(recipe_smart.router)
