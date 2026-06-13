@@ -326,6 +326,141 @@ async def get_shopping_history_stats(
     }
 
 
+@router.get("/products", status_code=status.HTTP_200_OK)
+async def get_all_purchased_products(
+    user: user_dependency,
+    db: db_dependency,
+    days: Optional[int] = Query(default=None, gt=0, le=3650),
+    limit: int = Query(default=500, gt=1, le=2000),
+):
+    owner_id = user.get("id")
+    _ensure_user(db, owner_id)
+
+    histories = (
+        _history_owned_query(db, owner_id)
+        .order_by(ShoppingHistory.created_at.asc())
+        .all()
+    )
+    histories = _filter_histories_by_days(histories, days)
+    history_ids = [h.id for h in histories]
+
+    if not history_ids:
+        return {
+            "overview": {
+                "unique_products": 0,
+                "total_quantity": 0,
+                "total_spent": 0,
+                "average_unit_price": 0,
+                "discounted_quantity": 0,
+                "discounted_share": 0,
+                "favorite_product": None,
+                "favorite_category": None,
+                "favorite_supermarket": None,
+            },
+            "products": [],
+            "days": days,
+        }
+
+    items = (
+        db.query(ShoppingHistoryItem)
+        .filter(ShoppingHistoryItem.history_id.in_(history_ids))
+        .all()
+    )
+    histories_by_id = {h.id: h for h in histories}
+
+    products: dict[str, dict] = {}
+    category_totals: dict[str, float] = defaultdict(float)
+    supermarket_totals: dict[str, float] = defaultdict(float)
+
+    total_quantity = 0
+    total_spent = 0.0
+    discounted_quantity = 0
+
+    for item in items:
+        qty = int(item.quantity or 1)
+        unit_price = float(item.price_paid or 0)
+        line_total = unit_price * qty
+        total_quantity += qty
+        total_spent += line_total
+
+        if item.was_discounted:
+            discounted_quantity += qty
+
+        category = item.category or "Senza categoria"
+        supermarket = item.supermarket_name or "N/D"
+        category_totals[category] += line_total
+        supermarket_totals[supermarket] += line_total
+
+        history = histories_by_id.get(item.history_id)
+        bought_at = history.created_at if history else None
+        key = f"{item.product_id or ''}|{item.name}|{item.unit or ''}|{supermarket}"
+
+        if key not in products:
+            products[key] = {
+                "product_id": item.product_id,
+                "name": item.name,
+                "image": item.image,
+                "unit": item.unit,
+                "category": category,
+                "supermarket_id": item.supermarket_id,
+                "supermarket_name": supermarket,
+                "quantity": 0,
+                "lines": 0,
+                "total": 0.0,
+                "average_unit_price": 0.0,
+                "discounted_quantity": 0,
+                "discounted_lines": 0,
+                "first_bought_at": bought_at,
+                "last_bought_at": bought_at,
+                "last_price_paid": unit_price,
+            }
+
+        row = products[key]
+        row["quantity"] += qty
+        row["lines"] += 1
+        row["total"] += line_total
+        row["last_price_paid"] = unit_price
+        if item.was_discounted:
+            row["discounted_quantity"] += qty
+            row["discounted_lines"] += 1
+
+        first_dt = _parse_datetime(row["first_bought_at"])
+        last_dt = _parse_datetime(row["last_bought_at"])
+        bought_dt = _parse_datetime(bought_at)
+        if bought_dt and (first_dt is None or bought_dt < first_dt):
+            row["first_bought_at"] = bought_at
+        if bought_dt and (last_dt is None or bought_dt > last_dt):
+            row["last_bought_at"] = bought_at
+
+    product_rows = []
+    for row in products.values():
+        row["total"] = _round_money(row["total"])
+        row["average_unit_price"] = _round_money(row["total"] / row["quantity"] if row["quantity"] else 0)
+        product_rows.append(row)
+
+    product_rows.sort(key=lambda r: (-int(r["quantity"] or 0), -float(r["total"] or 0), str(r["name"] or "")))
+
+    favorite_product = product_rows[0] if product_rows else None
+    favorite_category = max(category_totals.items(), key=lambda kv: kv[1], default=(None, 0))
+    favorite_supermarket = max(supermarket_totals.items(), key=lambda kv: kv[1], default=(None, 0))
+
+    return {
+        "overview": {
+            "unique_products": len(product_rows),
+            "total_quantity": total_quantity,
+            "total_spent": _round_money(total_spent),
+            "average_unit_price": _round_money(total_spent / total_quantity if total_quantity else 0),
+            "discounted_quantity": discounted_quantity,
+            "discounted_share": _round_money((discounted_quantity / total_quantity * 100) if total_quantity else 0),
+            "favorite_product": favorite_product,
+            "favorite_category": {"name": favorite_category[0], "total": _round_money(favorite_category[1])} if favorite_category[0] else None,
+            "favorite_supermarket": {"name": favorite_supermarket[0], "total": _round_money(favorite_supermarket[1])} if favorite_supermarket[0] else None,
+        },
+        "products": product_rows[:limit],
+        "days": days,
+    }
+
+
 @router.get("/{shopping_history_id}", status_code=status.HTTP_200_OK)
 async def get_shopping_history_by_id(user: user_dependency, db: db_dependency, shopping_history_id: int = Path(gt=0)):
     shopping_history_model = (

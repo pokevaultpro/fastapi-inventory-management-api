@@ -11,6 +11,35 @@ let supermarkets = [];     // full supermarkets
 const totalAllEl = document.getElementById("total-budget");
 const totalPendingEl = document.getElementById("total-remaining");
 
+function isDiscountActive(product) {
+  if (!product) return false;
+  const discounted = Number(product.discounted_price || 0);
+  const original = Number(product.original_price || 0);
+  if (!(discounted > 0 && original > 0 && discounted < original)) return false;
+
+  const validTo = product.flyer_valid_to;
+  if (!validTo) return true;
+  const end = new Date(`${validTo}T23:59:59`);
+  return Number.isNaN(end.getTime()) || end >= new Date();
+}
+
+function currentProductPrice(product) {
+  return isDiscountActive(product) ? Number(product.discounted_price) : Number(product?.original_price || 0);
+}
+
+function aisleOrder(item) {
+  const value = Number(item?.product?.aisle_order);
+  return Number.isFinite(value) ? value : 999999;
+}
+
+function sortForShopping(a, b, storeFilter) {
+  if (storeFilter !== "all") {
+    return aisleOrder(a) - aisleOrder(b) || String(a.product?.name || "").localeCompare(String(b.product?.name || ""), "it");
+  }
+  return String(a.supermarket?.name || "").localeCompare(String(b.supermarket?.name || ""), "it") ||
+         String(a.product?.name || "").localeCompare(String(b.product?.name || ""), "it");
+}
+
 
 document.getElementById("clear-cart-btn")
   .addEventListener("click", clearCart);
@@ -55,16 +84,19 @@ async function initCart() {
   const rawCart = await loadCart();
 
   // JOIN manuale cart → product → supermarket
-  shoppingList = rawCart.map(item => {
-    const product = products.find(p => p.id === item.product_id);
-    const supermarket = supermarkets.find(s => s.id === product.supermarket_id);
+  shoppingList = rawCart
+    .map(item => {
+      const product = products.find(p => p.id === item.product_id);
+      if (!product) return null;
+      const supermarket = supermarkets.find(s => s.id === product.supermarket_id) || { name: "Negozio" };
 
-    return {
-      ...item,
-      product,
-      supermarket
-    };
-  });
+      return {
+        ...item,
+        product,
+        supermarket
+      };
+    })
+    .filter(Boolean);
 
   renderList();
   populateStoreFilter();
@@ -113,24 +145,11 @@ let boughtItems = filtered.filter(i => i.checked);
   // =========================
   // 3. ORDINAMENTO
   // =========================
-  if (storeFilter === "all") {
-    // Ordina per nome
-    pendingItems.sort((a, b) => a.product.name.localeCompare(b.product.name));
-    boughtItems.sort((a, b) => a.product.name.localeCompare(b.product.name));
-  } else {
-    // Ordina per aisle_order
-    pendingItems.sort((a, b) => {
-      const aOrder = a.product.aisle_order ?? 9999;
-      const bOrder = b.product.aisle_order ?? 9999;
-      return aOrder - bOrder;
-    });
-
-    boughtItems.sort((a, b) => {
-      const aOrder = a.product.aisle_order ?? 9999;
-      const bOrder = b.product.aisle_order ?? 9999;
-      return aOrder - bOrder;
-    });
-  }
+  // "aisle_order" è l'ordine interno del supermercato/corsia.
+  // Si usa SOLO quando scegli un supermercato specifico.
+  // Non ha nulla a che vedere con la pagina del volantino.
+  pendingItems.sort((a, b) => sortForShopping(a, b, storeFilter));
+  boughtItems.sort((a, b) => sortForShopping(a, b, storeFilter));
 
   // =========================
   // 4. RENDER
@@ -139,9 +158,9 @@ let boughtItems = filtered.filter(i => i.checked);
     const product = item.product;
     const supermarket = item.supermarket;
 
-    const price = product.discounted_price ?? product.original_price;
+    const price = currentProductPrice(product);
     const subtotal = (price * item.quantity).toFixed(2);
-    const hasDiscount = product.discounted_price !== null;
+    const hasDiscount = isDiscountActive(product);
 
     const div = document.createElement("div");
     div.className = "shopping-item" + (item.checked ? " bought" : "");

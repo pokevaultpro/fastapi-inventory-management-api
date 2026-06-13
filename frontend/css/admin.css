@@ -96,3 +96,46 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+
+/* v19: role visible directly in admin page */
+.admin-role-card {
+  background:
+    radial-gradient(circle at top left, rgba(34,197,94,.18), transparent 38%),
+    linear-gradient(135deg, #ffffff, #f8fafc);
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  padding: 18px;
+  box-shadow: 0 22px 60px rgba(15,23,42,.10);
+}
+
+.admin-role-card small {
+  display: block;
+  color: #64748b;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 11px;
+}
+
+.admin-role-card strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 32px;
+  letter-spacing: -.06em;
+  color: #0f172a;
+}
+
+.admin-role-card p {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.admin-role-card.is-admin {
+  border-color: rgba(22, 163, 74, .24);
+  background:
+    radial-gradient(circle at top left, rgba(34,197,94,.24), transparent 38%),
+    linear-gradient(135deg, #ffffff, #ecfdf5);
+}

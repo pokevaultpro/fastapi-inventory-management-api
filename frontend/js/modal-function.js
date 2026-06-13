@@ -50,7 +50,7 @@ export function openProductModal(item, supermarket = {}) {
   document.getElementById("modal-location").textContent = item.location || "Non indicata";
 
   const lidlPlus = document.getElementById("modal-lidl-plus");
-  lidlPlus.classList.toggle("hidden", !item.is_lidl_plus);
+  lidlPlus.classList.toggle("hidden", !(hasDiscount(item) && item.is_lidl_plus));
 
   const sale = hasDiscount(item);
   if (sale) {
@@ -67,9 +67,9 @@ export function openProductModal(item, supermarket = {}) {
   }
 
   const flyerBox = document.getElementById("modal-flyer-box");
-  const page = item.flyer_page || (item.aisle_order && item.aisle_order < 900 ? Math.round(item.aisle_order) : null);
-  const dates = flyerDates(item);
-  const hasFlyerInfo = Boolean(page || dates.from || dates.to || item.is_lidl_plus);
+  const page = sale && item.flyer_page ? Number(item.flyer_page) : null;
+  const dates = sale ? flyerDates(item) : { from: null, to: null };
+  const hasFlyerInfo = sale && Boolean(page || dates.from || dates.to || item.is_lidl_plus);
 
   if (hasFlyerInfo) {
     flyerBox.classList.remove("hidden");

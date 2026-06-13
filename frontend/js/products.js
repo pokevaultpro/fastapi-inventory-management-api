@@ -201,7 +201,7 @@ function getFilteredProducts() {
     const matchesMode =
       state.mode === "all" ||
       (state.mode === "sale" && hasDiscount(p)) ||
-      (state.mode === "lidl-plus" && Boolean(p.is_lidl_plus)) ||
+      (state.mode === "lidl-plus" && hasDiscount(p) && Boolean(p.is_lidl_plus)) ||
       (state.mode === "favorites" && state.favorites.includes(p.id));
 
     return matchesSearch && matchesCategory && matchesStore && matchesMode;
@@ -213,7 +213,7 @@ function getFilteredProducts() {
       case "price-desc": return finalPrice(b) - finalPrice(a);
       case "name-asc": return String(a.name).localeCompare(String(b.name), "it");
       case "category": return String(a.category || "").localeCompare(String(b.category || ""), "it") || String(a.name).localeCompare(String(b.name), "it");
-      case "flyer-page": return (a.flyer_page || a.aisle_order || 9999) - (b.flyer_page || b.aisle_order || 9999) || String(a.name).localeCompare(String(b.name), "it");
+      case "flyer-page": return ((hasDiscount(a) && a.flyer_page) ? Number(a.flyer_page) : 9999) - ((hasDiscount(b) && b.flyer_page) ? Number(b.flyer_page) : 9999) || String(a.name).localeCompare(String(b.name), "it");
       case "best-discount":
       default:
         return discountPercent(b) - discountPercent(a) || finalPrice(a) - finalPrice(b);
@@ -250,7 +250,7 @@ function renderBestDeal() {
   box.innerHTML = `
     <div class="best-deal-name">${escapeHtml(best.name)}</div>
     <div class="best-deal-price">${formatEuro(finalPrice(best))}</div>
-    <div class="best-deal-meta">-${discountPercent(best)}% · ${best.flyer_page ? `pagina ${best.flyer_page}` : getSupermarketName(best)}</div>
+    <div class="best-deal-meta">-${discountPercent(best)}% · ${best.flyer_page ? `pagina volantino ${best.flyer_page}` : getSupermarketName(best)}</div>
   `;
 }
 
@@ -301,9 +301,9 @@ function createProductCard(p) {
   const supermarket = getSupermarket(p);
   const sale = hasDiscount(p);
   const favorite = state.favorites.includes(p.id);
-  const page = p.flyer_page || (p.aisle_order && p.aisle_order < 900 ? Math.round(p.aisle_order) : null);
-  const dates = flyerDates(p);
-  const validTo = formatDate(dates.to);
+  const page = sale && p.flyer_page ? Number(p.flyer_page) : null;
+  const dates = sale ? flyerDates(p) : { from: null, to: null };
+  const validTo = sale ? formatDate(dates.to) : "";
 
   const card = document.createElement("article");
   card.className = "product-card";
@@ -321,7 +321,7 @@ function createProductCard(p) {
     <div class="product-body">
       <div class="product-topline">
         <span class="store-chip">${escapeHtml(getSupermarketName(p))}</span>
-        ${p.is_lidl_plus ? `<span class="lidl-plus-chip">Lidl Plus</span>` : `<span class="category-chip">${escapeHtml(p.category || "Altro")}</span>`}
+        ${sale && p.is_lidl_plus ? `<span class="lidl-plus-chip">Lidl Plus</span>` : `<span class="category-chip">${escapeHtml(p.category || "Altro")}</span>`}
       </div>
 
       <div class="product-name">${escapeHtml(p.name)}</div>
@@ -334,9 +334,9 @@ function createProductCard(p) {
 
       <div class="card-footer">
         <div class="offer-context">
-          ${validTo ? `<span class="context-pill strong">fino al ${validTo}</span>` : ""}
-          ${p.offer_note ? `<span class="context-pill">${escapeHtml(p.offer_note)}</span>` : ""}
-          ${page && !validTo ? `<span class="context-pill strong">Volantino p.${page}</span>` : ""}
+          ${sale && validTo ? `<span class="context-pill strong">offerta fino al ${validTo}</span>` : ""}
+          ${sale && p.offer_note ? `<span class="context-pill">${escapeHtml(p.offer_note)}</span>` : ""}
+          ${sale && page && !validTo ? `<span class="context-pill strong">Volantino p.${page}</span>` : ""}
         </div>
         <button class="add-btn" type="button" aria-label="Aggiungi alla lista">+</button>
       </div>
