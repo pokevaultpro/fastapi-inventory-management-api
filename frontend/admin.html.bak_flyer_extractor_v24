@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - SmartGrocery</title>
+  <link rel="stylesheet" href="css/navbar.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body data-page="admin">
+<header class="top-header">
+  <div class="header-inner">
+    <div class="header-left"><div class="logo-icon">🛠️</div><span class="header-logo">SmartGrocery Admin</span></div>
+    <nav class="header-right">
+      <button class="nav-pill" data-tab="home" onclick="navigate('home')">Home</button>
+      <button class="nav-pill" data-tab="products" onclick="navigate('products')">Prodotti</button>
+      <button class="nav-pill" data-tab="history" onclick="navigate('history')">Storico</button>
+      <button class="nav-pill" data-tab="recipes" onclick="navigate('recipes')">Ricette</button>
+      <button class="nav-pill active" data-tab="admin">Admin</button>
+    </nav>
+  </div>
+</header>
+
+<main class="admin-page">
+  <section class="admin-mobile-block">
+    <h1>Admin disponibile solo da computer</h1>
+    <p>Questa pagina è pensata per modifiche delicate al database. Aprila da desktop.</p>
+  </section>
+
+  <section class="admin-desktop">
+    <div class="admin-hero">
+      <div>
+        <p class="eyebrow">Database control</p>
+        <h1>Pannello Admin</h1>
+        <p>Gestisci prodotti, supermercati, utenti e ricette senza entrare manualmente nel database.</p>
+      </div>
+      <div class="summary-grid" id="admin-summary"></div>
+    </div>
+
+    <div class="admin-tabs">
+      <button class="admin-tab active" data-admin-tab="products">Prodotti</button>
+      <button class="admin-tab" data-admin-tab="supermarkets">Supermercati</button>
+      <button class="admin-tab" data-admin-tab="users">Utenti</button>
+      <button class="admin-tab" data-admin-tab="recipes">Ricette</button>
+    </div>
+
+    <section class="admin-panel active" id="panel-products">
+      <div class="panel-head">
+        <div>
+          <h2>Prodotti</h2>
+          <p>Aggiungi, modifica o rimuovi prodotti dal catalogo. I campi con * sono obbligatori.</p>
+        </div>
+        <input id="product-admin-search" placeholder="Cerca prodotti...">
+      </div>
+
+      <form id="product-form" class="admin-form product-admin-form">
+        <input type="hidden" id="product-id">
+
+        <div class="form-section-title">Dati base</div>
+        <label>Nome prodotto *<input id="product-name" placeholder="Es. Pane integrale" required></label>
+        <label>Categoria *<input id="product-category" placeholder="Es. Pane e prodotti da forno" value="Altro" required></label>
+        <label>Marca<input id="product-brand" placeholder="Es. Lidl, Barilla..."></label>
+        <label>Unità / formato<input id="product-unit" placeholder="Es. 500 g, 1 L, pz" value="pz"></label>
+        <label>Tipo prezzo
+          <select id="product-price-type">
+            <option value="fixed">Prezzo fisso</option>
+            <option value="weight">Al peso / al kg</option>
+            <option value="manual">Prezzo manuale in lista</option>
+          </select>
+        </label>
+        <label>Unità prezzo<input id="product-price-unit" placeholder="Es. pz, kg, g, L" value="pz"></label>
+        <label>Supermercato *<select id="product-supermarket" required></select></label>
+
+        <div class="form-section-title">Prezzi e ordinamento</div>
+        <label>Prezzo originale *<input id="product-original" type="number" step="0.01" min="0.01" placeholder="Es. 1.99" required></label>
+        <label>Prezzo scontato<input id="product-discounted" type="number" step="0.01" min="0.01" placeholder="Lascia vuoto se non scontato"></label>
+        <label>Aisle order<input id="product-aisle-order" type="number" step="1" placeholder="Es. 10"></label>
+        <label>Posizione nel supermercato<input id="product-location" placeholder="Es. Reparto Pane e prodotti da forno"></label>
+
+        <div class="form-section-title">Volantino e immagine</div>
+        <label>URL immagine<input id="product-image" placeholder="/static/images/products/... oppure https://..."></label>
+        <label>Pagina volantino<input id="product-flyer-page" type="number" min="1" placeholder="Es. 7"></label>
+        <label>Validità da<input id="product-valid-from" type="date"></label>
+        <label>Validità a<input id="product-valid-to" type="date"></label>
+        <label class="checkbox-admin-field"><input id="product-lidl-plus" type="checkbox"> Lidl Plus</label>
+        <label>Nota offerta<input id="product-offer-note" placeholder="Es. solo con app, max 4 pezzi..."></label>
+
+        <div class="form-section-title">Valori nutrizionali</div>
+        <label>Calorie<input id="product-calories" type="number" step="0.1" min="0" placeholder="kcal"></label>
+        <label>Grassi<input id="product-fat" type="number" step="0.1" min="0" placeholder="g"></label>
+        <label>Carboidrati<input id="product-carbs" type="number" step="0.1" min="0" placeholder="g"></label>
+        <label>Proteine<input id="product-protein" type="number" step="0.1" min="0" placeholder="g"></label>
+
+        <div id="product-form-error" class="form-error" hidden></div>
+
+        <div class="form-actions-wide">
+          <button type="submit" class="primary-btn" id="product-save-btn">Salva prodotto</button>
+          <button type="button" class="ghost-btn" id="product-reset-btn">Nuovo</button>
+        </div>
+      </form>
+
+      <div class="admin-table" id="products-table"></div>
+    </section>
+
+    <section class="admin-panel" id="panel-supermarkets">
+      <div class="panel-head"><div><h2>Supermercati</h2><p>Gestisci negozi e insegne.</p></div></div>
+      <form id="supermarket-form" class="admin-form compact">
+        <input type="hidden" id="supermarket-id">
+        <input id="supermarket-name" placeholder="Nome supermercato" required>
+        <input id="supermarket-location" placeholder="Location">
+        <input id="supermarket-image" placeholder="URL immagine">
+        <button type="submit" class="primary-btn">Salva supermercato</button>
+        <button type="button" class="ghost-btn" id="supermarket-reset-btn">Nuovo</button>
+      </form>
+      <div class="admin-table" id="supermarkets-table"></div>
+    </section>
+
+    <section class="admin-panel" id="panel-users">
+      <div class="panel-head"><div><h2>Utenti</h2><p>Gestisci ruoli e stato account.</p></div><input id="user-admin-search" placeholder="Cerca utenti..."></div>
+      <div class="admin-table" id="users-table"></div>
+    </section>
+
+    <section class="admin-panel" id="panel-recipes">
+      <div class="panel-head"><div><h2>Ricette</h2><p>Modifica o rimuovi ricette di qualsiasi utente.</p></div><input id="recipe-admin-search" placeholder="Cerca ricette..."></div>
+      <form id="admin-recipe-form" class="admin-form compact">
+        <input type="hidden" id="admin-recipe-id">
+        <input id="admin-recipe-name" placeholder="Nome ricetta" required>
+        <input id="admin-recipe-owner" type="number" min="1" placeholder="Owner ID" required>
+        <input id="admin-recipe-image" placeholder="URL immagine">
+        <input id="admin-recipe-servings" type="number" min="1" value="1" placeholder="Porzioni">
+        <input id="admin-recipe-time" type="number" min="0" placeholder="Minuti">
+        <textarea id="admin-recipe-description" placeholder="Descrizione"></textarea>
+        <textarea id="admin-recipe-instructions" placeholder="Istruzioni"></textarea>
+        <button type="submit" class="primary-btn">Salva ricetta</button>
+        <button type="button" class="ghost-btn" id="admin-recipe-reset-btn">Nuova</button>
+      </form>
+      <div class="admin-table" id="recipes-table"></div>
+    </section>
+  </section>
+</main>
+
+<div id="admin-toast" class="admin-toast"></div>
+<script src="js/api.js"></script>
+<script src="js/navbar.js"></script>
+<script type="module" src="js/admin.js"></script>
+<script type="module" src="js/admin-role.js"></script>
+<script type="module" src="js/admin-history.js"></script>
+</body>
+</html>
