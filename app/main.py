@@ -17,6 +17,7 @@ from app.routers import admin, cart, shopping_history
 from app.services.schema_compat import ensure_schema_compat
 from app.routers import recipe_smart
 from app.routers import admin_history
+from app.routers import flyer_extractor
 
 
 
@@ -83,3 +84,4 @@ app.include_router(profile_role.router)
 app.include_router(admin_bootstrap.router)
 app.include_router(recipe_smart.router)
 app.include_router(admin_history.router)
+app.include_router(flyer_extractor.router)

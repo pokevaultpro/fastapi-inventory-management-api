@@ -10,4 +10,5 @@ bcrypt==4.0.1
 passlib[bcrypt]==1.7.4
 python-dotenv
 psycopg2-binary
-
+PyMuPDF>=1.24.0
+Pillow>=10.0.0
