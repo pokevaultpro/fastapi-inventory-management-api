@@ -48,7 +48,9 @@ class Products(Base):
     price_type = Column(String, default="fixed")
     price_unit = Column(String, nullable=True)
     supermarket = relationship("Supermarkets", back_populates="products")
-    cart_items = relationship("Cart", back_populates="product")class Favorites(Base):
+    cart_items = relationship("Cart", back_populates="product")
+
+class Favorites(Base):
     __tablename__ = 'favorites'
 
     id = Column(Integer, primary_key=True, index=True)
