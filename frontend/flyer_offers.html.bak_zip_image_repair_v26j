@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SmartGrocery - Offerte volantini</title>
   <link rel="stylesheet" href="css/flyer-offers-page-v26h.css" />
-  <link rel="stylesheet" href="css/flyer-offer-images-zip-repair-v26j.css" />
 </head>
 <body>
   <main class="page-shell">
@@ -81,6 +80,5 @@
   </main>
 
   <script type="module" src="js/flyer-offers-page-v26h.js"></script>
-  <script type="module" src="js/flyer-offer-images-zip-repair-v26j.js"></script>
 </body>
 </html>
