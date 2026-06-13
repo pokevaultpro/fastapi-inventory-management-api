@@ -55,6 +55,29 @@ def require_admin(user: dict) -> None:
     if not user or user.get("user_role") != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
+def require_product_variable_columns(requested_data: dict) -> None:
+    """
+    Do not silently ignore variable pricing fields.
+    If the frontend sends price_type/price_unit but the deployed Products model
+    does not contain those columns, the user must see an explicit backend error.
+    """
+    cols = model_column_names(Products)
+    missing = []
+    if "price_type" in requested_data and "price_type" not in cols:
+        missing.append("Products.price_type")
+    if "price_unit" in requested_data and "price_unit" not in cols:
+        missing.append("Products.price_unit")
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Backend Products model is missing variable pricing columns: "
+                + ", ".join(missing)
+                + ". Run python scripts\\force_variable_pricing_model_v20b.py, commit/push/deploy Render, then retry."
+            ),
+        )
+
+
 
 def model_column_names(model) -> set[str]:
     return {column.name for column in model.__table__.columns}
@@ -240,15 +263,27 @@ def admin_summary(user: user_dependency, db: db_dependency):
 
 
 @router.get("/debug/products-model")
-def admin_debug_products_model(user: user_dependency):
+def admin_debug_products_model(user: user_dependency, db: db_dependency):
     require_admin(user)
     cols = sorted(model_column_names(Products))
+    db_columns = []
+    try:
+        from sqlalchemy import inspect
+        db_columns = sorted(col["name"] for col in inspect(engine).get_columns("products"))
+    except Exception:
+        db_columns = []
+
     return {
         "products_model_columns": cols,
+        "products_db_columns": db_columns,
         "has_brand": "brand" in cols,
         "has_flyer_valid_from": "flyer_valid_from" in cols,
         "has_location": "location" in cols,
         "has_aisle_order": "aisle_order" in cols,
+        "has_price_type": "price_type" in cols,
+        "has_price_unit": "price_unit" in cols,
+        "db_has_price_type": "price_type" in db_columns,
+        "db_has_price_unit": "price_unit" in db_columns,
     }
 
 
@@ -278,6 +313,7 @@ def admin_create_product(user: user_dependency, db: db_dependency, request: Admi
         raise HTTPException(status_code=404, detail="Supermarket not found")
 
     data = request.model_dump()
+    require_product_variable_columns(data)
     known_data = safe_model_data(Products, data)
 
     if "name" not in known_data or "original_price" not in known_data or "supermarket_id" not in known_data:

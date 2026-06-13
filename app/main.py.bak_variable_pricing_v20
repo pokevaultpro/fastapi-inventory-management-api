@@ -13,8 +13,6 @@ load_dotenv()
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from app.routers import shopping_history
-from app.routers import admin, cart, shopping_history
-from app.services.schema_compat import ensure_schema_compat
 
 
 
@@ -58,11 +56,6 @@ app.add_middleware(
 
 
 Base.metadata.create_all(bind=engine)
-try:
-    ensure_schema_compat(engine)
-except Exception as exc:
-    print(f'Schema compatibility warning: {exc}')
-
 
 app.include_router(auth.router)
 app.include_router(products.router)
