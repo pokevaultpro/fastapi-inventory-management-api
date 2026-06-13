@@ -19,6 +19,11 @@ from app.services.flyer_offer_schema import ensure_flyer_offer_schema
 router = APIRouter(prefix="/admin/flyer-offers-page", tags=["admin-flyer-offers-page"])
 
 
+PRODUCT_IMAGE_PREFIX = "/static/images/products/"
+FLYER_IMAGE_MARKER = "static/images/flyer_offers/"
+PRODUCT_IMAGE_MARKER = "static/images/products/"
+
+
 def get_db():
     ensure_flyer_offer_schema(engine)
     db = SessionLocal()
@@ -49,6 +54,7 @@ class AssociateRequest(BaseModel):
 
 class RepairRequest(BaseModel):
     flyer_id: Optional[int] = None
+    force: bool = True
 
 
 PLACEHOLDER_VALUES = {
@@ -108,32 +114,61 @@ def image_is_placeholder(value: str | None) -> bool:
     return normalized in PLACEHOLDER_VALUES or "placeholder" in normalized
 
 
-def path_from_static_url(image: str | None) -> Path | None:
-    if not image:
+def is_good_product_image_path(value: str | None) -> bool:
+    if not value or image_is_placeholder(value):
+        return False
+
+    # DB should store relative product path, not Render absolute URL and not flyer_offers.
+    return value.startswith(PRODUCT_IMAGE_PREFIX)
+
+
+def static_relative_path(value: str | None) -> Path | None:
+    """
+    Convert any of these to a local relative path:
+    - /static/images/flyer_offers/a/b.jpg
+    - static/images/flyer_offers/a/b.jpg
+    - https://backend/static/images/flyer_offers/a/b.jpg
+    - /static/images/products/a.jpg
+    """
+    if not value:
         return None
-    if image.startswith("http://") or image.startswith("https://"):
+
+    raw = str(value).strip()
+    if not raw:
         return None
-    rel = image.lstrip("/")
-    if not rel:
-        return None
-    return Path(rel)
+
+    for marker in [FLYER_IMAGE_MARKER, PRODUCT_IMAGE_MARKER]:
+        idx = raw.find(marker)
+        if idx >= 0:
+            return Path(raw[idx:])
+
+    if raw.startswith("/static/"):
+        return Path(raw.lstrip("/"))
+    if raw.startswith("static/"):
+        return Path(raw)
+
+    return None
 
 
 def copy_offer_image_to_product_image(offer_image: str | None, product_name: str) -> str | None:
+    """
+    Product.image must always be a relative product path:
+        /static/images/products/<slug>.jpg
+
+    Never stores:
+        https://.../static/...
+        /static/images/flyer_offers/...
+    """
     if not offer_image or image_is_placeholder(offer_image):
         return None
 
-    if offer_image.startswith("http://") or offer_image.startswith("https://"):
-        return offer_image
-
-    src_rel = path_from_static_url(offer_image)
+    src_rel = static_relative_path(offer_image)
     if not src_rel:
-        return offer_image
+        return None
 
     src = Path.cwd() / src_rel
     if not src.exists() or not src.is_file():
-        # Keep the useful path in DB; do not replace with placeholder.
-        return offer_image
+        return None
 
     suffix = src.suffix.lower() or ".jpg"
     filename = f"{slugify(product_name)}{suffix}"
@@ -152,7 +187,7 @@ def copy_offer_image_to_product_image(offer_image: str | None, product_name: str
     except Exception:
         pass
 
-    return f"/static/images/products/{filename}"
+    return f"{PRODUCT_IMAGE_PREFIX}{filename}"
 
 
 def add_alias(db: Session, *, product_id: int, supermarket_id: int | None, alias_name: str) -> None:
@@ -191,7 +226,12 @@ def create_product_from_offer_sql(db: Session, offer_id: int, *, create_alias: b
 
     flyer = db.execute(text("SELECT * FROM flyers WHERE id = :id"), {"id": offer["flyer_id"]}).mappings().first()
     supermarket_id = flyer["supermarket_id"] if flyer else None
-    product_image = copy_offer_image_to_product_image(offer["image"], offer["raw_name"]) or offer["image"]
+
+    product_image = copy_offer_image_to_product_image(offer["image"], offer["raw_name"])
+    if not product_image:
+        # Keep a product path anyway; this avoids storing flyer_offers paths in products.
+        # The file may be added later manually or via a future repair.
+        product_image = f"{PRODUCT_IMAGE_PREFIX}{slugify(offer['raw_name'])}.jpg"
 
     params: dict[str, Any] = {
         "name": offer["raw_name"],
@@ -320,6 +360,7 @@ def list_offers(
                    o.flyer_page, o.image, o.valid_from, o.valid_to,
                    o.match_status, o.match_score, o.status,
                    p.name AS product_name,
+                   p.image AS product_image,
                    sp.name AS suggested_product_name
             FROM flyer_offers o
             LEFT JOIN products p ON p.id = o.product_id
@@ -580,15 +621,21 @@ def repair_product_images(user: user_dependency, db: db_dependency, request: Rep
 
     repaired = 0
     skipped = 0
+    failed_missing_crop = 0
 
     for row in rows:
-        if not image_is_placeholder(row["product_image"]):
+        if is_good_product_image_path(row["product_image"]) and not request.force:
+            skipped += 1
+            continue
+
+        # Force repair if current product image is placeholder, absolute URL, or flyer_offers path.
+        if is_good_product_image_path(row["product_image"]) and request.force:
             skipped += 1
             continue
 
         new_image = copy_offer_image_to_product_image(row["offer_image"], row["product_name"] or row["raw_name"])
-        if not new_image or image_is_placeholder(new_image):
-            skipped += 1
+        if not new_image or not is_good_product_image_path(new_image):
+            failed_missing_crop += 1
             continue
 
         db.execute(
@@ -598,4 +645,10 @@ def repair_product_images(user: user_dependency, db: db_dependency, request: Rep
         repaired += 1
 
     db.commit()
-    return {"ok": True, "checked": len(rows), "repaired": repaired, "skipped": skipped}
+    return {
+        "ok": True,
+        "checked": len(rows),
+        "repaired": repaired,
+        "skipped": skipped,
+        "failed_missing_crop": failed_missing_crop,
+    }

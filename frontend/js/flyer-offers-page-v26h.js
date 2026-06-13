@@ -45,6 +45,15 @@ function mediaUrl(path) {
   return value;
 }
 
+function imagePathLabel(path) {
+  if (!path) return "nessuna";
+  const value = String(path);
+  if (value.includes("/static/images/products/")) return "PRODUCT";
+  if (value.includes("/static/images/flyer_offers/")) return "FLYER";
+  if (value.startsWith("http")) return "URL";
+  return "ALTRO";
+}
+
 async function api(path, options = {}) {
   const headers = {
     Authorization: `Bearer ${token()}`,
@@ -150,7 +159,6 @@ async function loadOffers() {
   state.items = data.items || [];
   state.total = data.total || 0;
 
-  // Deselect offers not on page to keep bulk actions predictable.
   const pageIds = new Set(state.items.map((x) => Number(x.id)));
   state.selected = new Set(Array.from(state.selected).filter((id) => pageIds.has(id)));
 
@@ -169,33 +177,38 @@ function renderOffers() {
   }
 
   $("offersList").className = "offers-list";
-  $("offersList").innerHTML = state.items.map((o) => `
-    <article class="offer-row" data-id="${o.id}">
-      <label class="check"><input type="checkbox" data-check="${o.id}" ${state.selected.has(Number(o.id)) ? "checked" : ""}></label>
+  $("offersList").innerHTML = state.items.map((o) => {
+    const productImageStatus = imagePathLabel(o.product_image);
+    return `
+      <article class="offer-row" data-id="${o.id}">
+        <label class="check"><input type="checkbox" data-check="${o.id}" ${state.selected.has(Number(o.id)) ? "checked" : ""}></label>
 
-      <button class="image-btn" data-img="${esc(mediaUrl(o.image))}">Mostra img</button>
+        <button class="image-btn" data-img="${esc(mediaUrl(o.image))}">Mostra img</button>
 
-      <div class="offer-main">
-        <div class="badges">
-          <span class="badge match ${esc(o.match_status || "")}">${esc(labelMatch(o.match_status))} · ${Math.round(Number(o.match_score || 0) * 100)}%</span>
-          <span class="badge">${esc(o.status)}</span>
-          <span class="badge">pag. ${esc(o.flyer_page || "?")}</span>
+        <div class="offer-main">
+          <div class="badges">
+            <span class="badge match ${esc(o.match_status || "")}">${esc(labelMatch(o.match_status))} · ${Math.round(Number(o.match_score || 0) * 100)}%</span>
+            <span class="badge">${esc(o.status)}</span>
+            <span class="badge">pag. ${esc(o.flyer_page || "?")}</span>
+            ${o.product_id ? `<span class="badge image-status ${productImageStatus.toLowerCase()}">img prodotto: ${productImageStatus}</span>` : ""}
+          </div>
+          <h3>${esc(o.raw_name)}</h3>
+          <p>${esc(o.category || "Altro")} · ${esc(o.unit || o.price_unit || "pz")} · ${esc(o.price_type || "fixed")}</p>
+          <p class="matchline">Match: <strong>${esc(o.product_name || o.suggested_product_name || "nessuno")}</strong></p>
+          ${o.product_id ? `<p class="pathline">Product image: ${esc(o.product_image || "vuota")}</p>` : ""}
         </div>
-        <h3>${esc(o.raw_name)}</h3>
-        <p>${esc(o.category || "Altro")} · ${esc(o.unit || o.price_unit || "pz")} · ${esc(o.price_type || "fixed")}</p>
-        <p class="matchline">Match: <strong>${esc(o.product_name || o.suggested_product_name || "nessuno")}</strong></p>
-      </div>
 
-      <div class="price">${euro(o.offer_price)}</div>
+        <div class="price">${euro(o.offer_price)}</div>
 
-      <div class="row-actions">
-        ${o.suggested_product_id ? `<button class="secondary" data-action="associate" data-product="${o.suggested_product_id}">Associa suggerito</button>` : ""}
-        <button class="secondary" data-action="search">Cerca</button>
-        <button class="primary" data-action="create">Crea prodotto</button>
-        <button class="danger" data-action="reject">Scarta</button>
-      </div>
-    </article>
-  `).join("");
+        <div class="row-actions">
+          ${o.suggested_product_id ? `<button class="secondary" data-action="associate" data-product="${o.suggested_product_id}">Associa suggerito</button>` : ""}
+          <button class="secondary" data-action="search">Cerca</button>
+          <button class="primary" data-action="create">Crea prodotto</button>
+          <button class="danger" data-action="reject">Scarta</button>
+        </div>
+      </article>
+    `;
+  }).join("");
 
   updateSelection();
   updatePager();
@@ -343,15 +356,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   $("repairImages").addEventListener("click", async () => {
     if (!state.flyerId) return alert("Seleziona un volantino.");
-    if (!confirm("Riparare immagini prodotto usando i crop delle offerte?")) return;
+    if (!confirm("Riparare le immagini prodotto con percorso NON /static/images/products/?")) return;
     const res = await api("/admin/flyer-offers-page/repair-product-images", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ flyer_id: state.flyerId }),
+      body: JSON.stringify({ flyer_id: state.flyerId, force: true }),
     });
     if (!res.ok) return alert(await readError(res));
     const data = await res.json();
-    alert(`Controllate ${data.checked}, riparate ${data.repaired}, saltate ${data.skipped}`);
+    alert(`Controllate ${data.checked}, riparate ${data.repaired}, saltate ${data.skipped}, crop mancanti ${data.failed_missing_crop}`);
     await loadOffers();
   });
 

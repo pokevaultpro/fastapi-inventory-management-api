@@ -365,3 +365,22 @@ h1 {
     grid-column: auto;
   }
 }
+
+.image-status.product {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.image-status.flyer,
+.image-status.url,
+.image-status.altro {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.pathline {
+  margin-top: 4px !important;
+  font-size: 11px;
+  word-break: break-all;
+  color: #94a3b8 !important;
+}
