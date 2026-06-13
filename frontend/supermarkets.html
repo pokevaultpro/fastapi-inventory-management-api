@@ -1,25 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Supermercati</title>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-        <link rel="stylesheet" href="css/navbar.css">
-        <link rel="stylesheet" href="css/modal.css">
-    <link rel="stylesheet" href="css/supermarkets.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Negozi - SmartGrocery</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/navbar.css">
+  <link rel="stylesheet" href="css/modal.css">
+  <link rel="stylesheet" href="css/supermarkets.css">
 </head>
 
 <body data-page="supermarkets">
-
 <header class="top-header">
   <div class="header-inner">
-
     <div class="header-left">
       <div class="logo-icon">
         <svg class="cart-svg" viewBox="0 0 24 24" fill="none" stroke="white">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M2.5 3h2l1.6 9.5a2 2 0 002 1.7h8.4a2 2 0 001.9-1.4l2.1-6.8H6.1" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.5 3h2l1.6 9.5a2 2 0 002 1.7h8.4a2 2 0 001.9-1.4l2.1-6.8H6.1" />
           <circle cx="9" cy="19" r="1.5" />
           <circle cx="17" cy="19" r="1.5" />
         </svg>
@@ -35,54 +32,81 @@
       <button class="nav-pill" data-tab="supermarkets" onclick="navigate('supermarkets')">Negozi</button>
       <button class="nav-pill" data-tab="profile" onclick="navigate('profile')">Profilo</button>
     </nav>
-
   </div>
 </header>
 
+<main class="stores-shell">
+  <section id="supermarkets-page" class="stores-page">
+    <div class="stores-hero">
+      <div>
+        <p class="stores-kicker">Negozi e percorsi</p>
+        <h1>Negozi</h1>
+        <p>Confronta catalogo, offerte e prodotti per supermercato. Quando apri un negozio, i prodotti sono pensati per essere letti in modo chiaro anche da telefono.</p>
+      </div>
+      <div class="stores-hero-card">
+        <span>🏪</span>
+        <strong id="stores-count">0</strong>
+        <small>negozi disponibili</small>
+      </div>
+    </div>
 
+    <div class="stores-toolbar">
+      <div class="store-search-wrap">
+        <span>🔎</span>
+        <input id="store-search" placeholder="Cerca negozio o città...">
+      </div>
+      <select id="store-sort">
+        <option value="name">Ordina per nome</option>
+        <option value="offers">Più offerte</option>
+        <option value="products">Più prodotti</option>
+      </select>
+    </div>
 
+    <div id="supermarket-list" class="stores-grid"></div>
+  </section>
 
-<!-- ===== CONTENUTO PAGINA ===== -->
+  <section id="supermarket-details" class="store-detail hidden">
+    <button id="back-btn" class="back-btn">← Torna ai negozi</button>
+    <div id="sm-header" class="store-detail-hero"></div>
 
-<div id="supermarkets-page" class="page hidden">
-    <h1 class="title">Supermercati</h1>
-    <div id="supermarket-list" class="list"></div>
-</div>
+    <div class="store-products-head">
+      <div>
+        <p class="stores-kicker">Catalogo negozio</p>
+        <h2>Prodotti disponibili</h2>
+      </div>
+      <div class="store-products-tools">
+        <input id="store-product-search" placeholder="Cerca prodotto...">
+        <select id="store-product-sort">
+          <option value="aisle">Ordine corsia</option>
+          <option value="offers">Offerte prima</option>
+          <option value="name">Nome</option>
+          <option value="price">Prezzo</option>
+        </select>
+      </div>
+    </div>
 
-<div id="supermarket-details" class="page hidden">
-    <button id="back-btn" class="back-btn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M15 19l-7-7 7-7" />
-        </svg>
-        Torna ai Supermercati
-    </button>
+    <div id="products-grid" class="store-products-grid"></div>
+  </section>
+</main>
 
-
-    <div id="sm-header" class="sm-header"></div>
-
-    <h2 class="subtitle">Prodotti Disponibili</h2>
-    <div id="products-grid" class="products-grid"></div>
-</div>
 <div id="modal-root"></div>
-    <div id="bottom-bar-container"></div>
-    <script>
+<div id="bottom-bar-container"></div>
+
+<script>
 fetch("bottom-bar.html")
   .then(r => r.text())
   .then(html => {
     document.getElementById("bottom-bar-container").innerHTML = html;
-
     const script = document.createElement("script");
     script.type = "module";
     script.src = "js/quick-actions.js";
     document.body.appendChild(script);
   });
+</script>
 
-    </script>
-
-    <script type="module" src="js/modal-loader.js"></script>
-    <script type="module" src="js/supermarkets.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/navbar.js"></script>
+<script type="module" src="js/modal-loader.js"></script>
+<script type="module" src="js/supermarkets.js"></script>
+<script src="js/api.js"></script>
+<script src="js/navbar.js"></script>
 </body>
 </html>
