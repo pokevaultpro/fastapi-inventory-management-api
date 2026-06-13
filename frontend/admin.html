@@ -6,7 +6,343 @@
   <title>Admin - SmartGrocery</title>
   <link rel="stylesheet" href="css/navbar.css">
   <link rel="stylesheet" href="css/admin.css">
-  <link rel="stylesheet" href="css/flyer-extractor-admin-v24c.css">
+
+<style id="flyer-extractor-inline-css">
+/* v24c: Flyer Image Extractor embedded v24e inside admin.html only */
+
+.flyer-extractor-panel {
+  margin-top: 18px;
+}
+
+.flyer-visible-fallback {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.flyer-panel-head p {
+  max-width: 760px;
+}
+
+.flyer-status-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 14px 0 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 13px 15px;
+}
+
+.flyer-status-card strong {
+  color: #0f172a;
+  font-weight: 950;
+}
+
+.flyer-status-card span {
+  color: #64748b;
+  font-weight: 800;
+}
+
+.flyer-status-card.ok {
+  border-color: rgba(34, 197, 94, .35);
+  background: #f0fdf4;
+}
+
+.flyer-status-card.error {
+  border-color: rgba(220, 38, 38, .35);
+  background: #fef2f2;
+}
+
+.flyer-extractor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.flyer-box,
+.flyer-result {
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  background: #fff;
+  padding: 18px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, .06);
+}
+
+.flyer-box-wide {
+  grid-column: 1 / -1;
+}
+
+.flyer-box h3,
+.flyer-result h3 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 22px;
+  letter-spacing: -.04em;
+}
+
+.flyer-box p {
+  margin: 0 0 14px;
+  color: #64748b;
+  font-weight: 750;
+}
+
+.flyer-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.flyer-form-grid label {
+  display: grid;
+  gap: 5px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.flyer-form-grid input,
+.flyer-form-grid select,
+.flyer-upload-row input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  padding: 10px 12px;
+  color: #0f172a;
+  background: #fff;
+  font-weight: 800;
+}
+
+.flyer-upload-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.flyer-url-row {
+  grid-template-columns: 1fr auto;
+}
+
+.flyer-result {
+  margin: 18px 0;
+}
+
+.flyer-loading,
+.flyer-error {
+  display: grid;
+  place-items: center;
+  gap: 9px;
+  min-height: 180px;
+  text-align: center;
+  color: #0f172a;
+}
+
+.flyer-error {
+  color: #991b1b;
+  background: #fef2f2;
+  border-radius: 18px;
+}
+
+.spinner {
+  width: 34px;
+  height: 34px;
+  border: 4px solid #dcfce7;
+  border-top-color: #16a34a;
+  border-radius: 999px;
+  animation: flyerSpin .9s linear infinite;
+}
+
+@keyframes flyerSpin {
+  to { transform: rotate(360deg); }
+}
+
+.flyer-result-head,
+.flyer-recent-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.flyer-kicker {
+  margin: 0;
+  color: #16a34a;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.flyer-result-head h3 {
+  margin: 3px 0;
+  font-size: 28px;
+}
+
+.flyer-result-head p {
+  margin: 0;
+  color: #64748b;
+  font-weight: 800;
+}
+
+.flyer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.flyer-contact-sheet {
+  display: block;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 16px;
+  background: #f8fafc;
+}
+
+.flyer-contact-sheet img {
+  display: block;
+  width: 100%;
+  max-height: 430px;
+  object-fit: contain;
+}
+
+.flyer-pages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: 12px;
+}
+
+.flyer-page-card {
+  display: grid;
+  gap: 8px;
+  text-decoration: none;
+  color: #0f172a;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #f8fafc;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+.flyer-page-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(22, 163, 74, .45);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, .08);
+}
+
+.flyer-page-card img {
+  width: 100%;
+  aspect-ratio: 1 / 1.35;
+  object-fit: cover;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.flyer-page-card span {
+  font-size: 12px;
+  font-weight: 950;
+  text-align: center;
+}
+
+.flyer-recent-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.flyer-recent-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 17px;
+  padding: 12px;
+  background: #f8fafc;
+  text-align: left;
+  cursor: pointer;
+}
+
+.flyer-recent-card strong {
+  display: block;
+  color: #0f172a;
+  font-weight: 950;
+}
+
+.flyer-recent-card small {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-weight: 750;
+}
+
+@media (max-width: 1000px) {
+  .flyer-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .flyer-extractor-grid,
+  .flyer-form-grid,
+  .flyer-upload-row,
+  .flyer-url-row {
+    grid-template-columns: 1fr;
+  }
+
+  .flyer-result-head,
+  .flyer-recent-head,
+  .flyer-status-card {
+    flex-direction: column;
+  }
+
+  .flyer-actions {
+    justify-content: flex-start;
+  }
+}
+
+
+/* v24d: static fallback section is visible even if admin tabs are not compatible */
+#panel-flyer-extractor.flyer-static-section {
+  display: block;
+  opacity: 1;
+  visibility: visible;
+  margin: 24px auto;
+  max-width: 1180px;
+}
+
+.flyer-admin-static-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 10px 10px 0;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-weight: 950;
+  text-decoration: none;
+  box-shadow: 0 14px 35px rgba(22, 163, 74, .22);
+  cursor: pointer;
+}
+
+.flyer-static-top-notice {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(34,197,94,.35);
+  border-radius: 16px;
+  background: #f0fdf4;
+  color: #166534;
+  font-weight: 850;
+}
+
+</style>
 </head>
 <body data-page="admin">
 <header class="top-header">
@@ -43,6 +379,7 @@
       <button class="admin-tab" data-admin-tab="supermarkets">Supermercati</button>
       <button class="admin-tab" data-admin-tab="users">Utenti</button>
       <button class="admin-tab" data-admin-tab="recipes">Ricette</button>
+      <button class="admin-tab" data-admin-tab="flyer-extractor">Volantini</button>
     </div>
 
     <section class="admin-panel active" id="panel-products">
@@ -137,6 +474,87 @@
       </form>
       <div class="admin-table" id="recipes-table"></div>
     </section>
+
+<section class="admin-panel flyer-extractor-panel flyer-static-section" id="panel-flyer-extractor">
+  <div class="panel-head flyer-panel-head">
+    <div>
+      <h2>Flyer Image Extractor</h2>
+      <p>Carica PDF o ZIP immagini. L'app crea solo immagini pagina, contact sheet e ZIP. Nessun OCR e nessuna importazione prodotti automatica.</p>
+    </div>
+    <button type="button" class="primary-btn" id="flyer-health-btn">Controlla extractor</button>
+  </div>
+
+  <div class="flyer-static-top-notice">
+    Se vedi questo box, il Flyer Image Extractor è finalmente dentro admin.html. Se i pulsanti non rispondono, fai Ctrl+F5.
+  </div>
+
+  <div class="flyer-status-card" id="flyer-status-card">
+    <strong>Backend extractor</strong>
+    <span>In attesa di controllo...</span>
+  </div>
+
+  <div class="flyer-extractor-grid">
+    <section class="flyer-box flyer-box-wide">
+      <h3>1. Dati volantino</h3>
+      <div class="flyer-form-grid">
+        <label>Titolo
+          <input id="flyer-title" placeholder="Es. Conad Super Risparmio">
+        </label>
+        <label>Supermercato
+          <select id="flyer-supermarket">
+            <option value="">Nessuno / da decidere</option>
+          </select>
+        </label>
+        <label>Valido da
+          <input id="flyer-valid-from" type="date">
+        </label>
+        <label>Valido fino a
+          <input id="flyer-valid-to" type="date">
+        </label>
+      </div>
+    </section>
+
+    <section class="flyer-box">
+      <h3>2. PDF volantino</h3>
+      <p>Per Conad/Coop/MD quando hai un PDF vero.</p>
+      <div class="flyer-upload-row">
+        <input id="flyer-pdf" type="file" accept="application/pdf">
+        <button type="button" class="primary-btn" id="flyer-upload-pdf-btn">Estrai pagine PDF</button>
+      </div>
+    </section>
+
+    <section class="flyer-box">
+      <h3>3. ZIP immagini</h3>
+      <p>Per Lidl o siti senza PDF: carichi qui lo ZIP immagini pagina preparato fuori.</p>
+      <div class="flyer-upload-row">
+        <input id="flyer-images-zip" type="file" accept=".zip,application/zip">
+        <button type="button" class="primary-btn" id="flyer-upload-zip-btn">Importa immagini</button>
+      </div>
+    </section>
+
+    <section class="flyer-box flyer-box-wide">
+      <h3>4. URL diretto PDF/immagine</h3>
+      <p>Funziona solo se il link punta direttamente a un PDF o a una immagine. Non legge siti HTML.</p>
+      <div class="flyer-upload-row flyer-url-row">
+        <input id="flyer-url" placeholder="https://.../volantino.pdf">
+        <button type="button" class="ghost-btn" id="flyer-url-btn">Scarica da URL</button>
+      </div>
+    </section>
+  </div>
+
+  <section class="flyer-result" id="flyer-result">
+    <div class="empty-state">Nessuna estrazione ancora.</div>
+  </section>
+
+  <section class="flyer-box flyer-recent">
+    <div class="flyer-recent-head">
+      <h3>Estrazioni recenti</h3>
+      <button type="button" class="ghost-btn" id="flyer-refresh-recent-btn">Aggiorna</button>
+    </div>
+    <div id="flyer-recent-list" class="flyer-recent-list"></div>
+  </section>
+</section>
+
   </section>
 </main>
 
@@ -146,6 +564,493 @@
 <script type="module" src="js/admin.js"></script>
 <script type="module" src="js/admin-role.js"></script>
 <script type="module" src="js/admin-history.js"></script>
-<script type="module" src="js/flyer-extractor-admin-v24c.js"></script>
+
+<script type="module" id="flyer-extractor-inline-js">
+import CONFIG from "./js/config.js";
+
+const token = localStorage.getItem("token");
+if (!token) window.location.href = "index.html";
+
+const state = {
+  supermarkets: [],
+  recent: [],
+};
+
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
+
+function authHeaders(extra = {}) {
+  return { Authorization: `Bearer ${localStorage.getItem("token")}`, ...extra };
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(`${CONFIG.API_BASE_URL}${path}`, {
+    ...options,
+    headers: { ...authHeaders(options.headers || {}) },
+  });
+
+  if (res.status === 401) {
+    localStorage.removeItem("token");
+    window.location.href = "index.html";
+  }
+
+  return res;
+}
+
+async function readError(res) {
+  try {
+    const data = await res.json();
+    if (typeof data.detail === "string") return data.detail;
+    return JSON.stringify(data.detail || data);
+  } catch {
+    return res.statusText || "Errore sconosciuto";
+  }
+}
+
+function absoluteUrl(path) {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  return `${CONFIG.API_BASE_URL}${path}`;
+}
+
+function findAdminContainer() {
+  return (
+    document.querySelector(".admin-desktop") ||
+    document.querySelector(".admin-content") ||
+    document.querySelector("main") ||
+    document.body
+  );
+}
+
+function findTabsContainer() {
+  return (
+    document.querySelector(".admin-tabs") ||
+    document.querySelector(".admin-nav") ||
+    document.querySelector("[data-admin-tabs]") ||
+    document.querySelector(".tabs")
+  );
+}
+
+function deactivateExistingPanels() {
+  document.querySelectorAll(".admin-tab").forEach((tab) => tab.classList.remove("active"));
+  document.querySelectorAll(".admin-panel").forEach((panel) => panel.classList.remove("active"));
+}
+
+function activateFlyerPanel() {
+  deactivateExistingPanels();
+  document.querySelectorAll("[data-admin-tab='flyer-extractor']").forEach((tab) => tab.classList.add("active"));
+  const panel = document.getElementById("panel-flyer-extractor");
+  if (panel) {
+    panel.classList.add("active");
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  loadRecent();
+}
+
+function ensureTab() {
+  const tabs = findTabsContainer();
+  if (!tabs) return false;
+
+  let tab = tabs.querySelector("[data-admin-tab='flyer-extractor']");
+  if (!tab) {
+    tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "admin-tab";
+    tab.dataset.adminTab = "flyer-extractor";
+    tab.textContent = "Volantini";
+    tabs.appendChild(tab);
+  }
+
+  tab.addEventListener("click", activateFlyerPanel);
+  return true;
+}
+
+function createPanelHtml() {
+  return `
+    <div class="panel-head flyer-panel-head">
+      <div>
+        <h2>Flyer Image Extractor</h2>
+        <p>Carica PDF o ZIP immagini. L'app crea solo immagini pagina, contact sheet e ZIP. Nessun OCR e nessuna importazione prodotti automatica.</p>
+      </div>
+      <button type="button" class="primary-btn" id="flyer-health-btn">Controlla extractor</button>
+    </div>
+
+    <div class="flyer-status-card" id="flyer-status-card">
+      <strong>Backend extractor</strong>
+      <span>In attesa di controllo...</span>
+    </div>
+
+    <div class="flyer-extractor-grid">
+      <section class="flyer-box flyer-box-wide">
+        <h3>1. Dati volantino</h3>
+        <div class="flyer-form-grid">
+          <label>Titolo
+            <input id="flyer-title" placeholder="Es. Conad Super Risparmio">
+          </label>
+          <label>Supermercato
+            <select id="flyer-supermarket">
+              <option value="">Nessuno / da decidere</option>
+            </select>
+          </label>
+          <label>Valido da
+            <input id="flyer-valid-from" type="date">
+          </label>
+          <label>Valido fino a
+            <input id="flyer-valid-to" type="date">
+          </label>
+        </div>
+      </section>
+
+      <section class="flyer-box">
+        <h3>2. PDF volantino</h3>
+        <p>Per Conad/Coop/MD quando hai un PDF vero.</p>
+        <div class="flyer-upload-row">
+          <input id="flyer-pdf" type="file" accept="application/pdf">
+          <button type="button" class="primary-btn" id="flyer-upload-pdf-btn">Estrai pagine PDF</button>
+        </div>
+      </section>
+
+      <section class="flyer-box">
+        <h3>3. ZIP immagini</h3>
+        <p>Per Lidl o siti senza PDF: carichi qui lo ZIP immagini pagina preparato fuori.</p>
+        <div class="flyer-upload-row">
+          <input id="flyer-images-zip" type="file" accept=".zip,application/zip">
+          <button type="button" class="primary-btn" id="flyer-upload-zip-btn">Importa immagini</button>
+        </div>
+      </section>
+
+      <section class="flyer-box flyer-box-wide">
+        <h3>4. URL diretto PDF/immagine</h3>
+        <p>Funziona solo se il link punta direttamente a un PDF o a una immagine. Non legge siti HTML.</p>
+        <div class="flyer-upload-row flyer-url-row">
+          <input id="flyer-url" placeholder="https://.../volantino.pdf">
+          <button type="button" class="ghost-btn" id="flyer-url-btn">Scarica da URL</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="flyer-result" id="flyer-result">
+      <div class="empty-state">Nessuna estrazione ancora.</div>
+    </section>
+
+    <section class="flyer-box flyer-recent">
+      <div class="flyer-recent-head">
+        <h3>Estrazioni recenti</h3>
+        <button type="button" class="ghost-btn" id="flyer-refresh-recent-btn">Aggiorna</button>
+      </div>
+      <div id="flyer-recent-list" class="flyer-recent-list"></div>
+    </section>
+  `;
+}
+
+function ensurePanel() {
+  let panel = document.getElementById("panel-flyer-extractor");
+  if (!panel) {
+    panel = document.createElement("section");
+    panel.className = "admin-panel flyer-extractor-panel";
+    panel.id = "panel-flyer-extractor";
+    panel.innerHTML = createPanelHtml();
+
+    const container = findAdminContainer();
+    container.appendChild(panel);
+  }
+
+  const hasTabs = ensureTab();
+
+  // If we do not find a real admin tab area, show it directly inside admin page.
+  if (!hasTabs) {
+    panel.classList.add("active", "flyer-visible-fallback");
+  }
+
+  bindEvents();
+  return panel;
+}
+
+function bindEvents() {
+  document.getElementById("flyer-health-btn")?.addEventListener("click", checkHealth);
+  document.getElementById("flyer-upload-pdf-btn")?.addEventListener("click", uploadPdf);
+  document.getElementById("flyer-upload-zip-btn")?.addEventListener("click", uploadZip);
+  document.getElementById("flyer-url-btn")?.addEventListener("click", importUrl);
+  document.getElementById("flyer-refresh-recent-btn")?.addEventListener("click", loadRecent);
+}
+
+function commonFormData() {
+  const data = new FormData();
+  const title = document.getElementById("flyer-title")?.value.trim();
+  const supermarketId = document.getElementById("flyer-supermarket")?.value;
+  const validFrom = document.getElementById("flyer-valid-from")?.value;
+  const validTo = document.getElementById("flyer-valid-to")?.value;
+
+  if (title) data.append("title", title);
+  if (supermarketId) data.append("supermarket_id", supermarketId);
+  if (validFrom) data.append("valid_from", validFrom);
+  if (validTo) data.append("valid_to", validTo);
+
+  return data;
+}
+
+function commonJson() {
+  const title = document.getElementById("flyer-title")?.value.trim();
+  const supermarketId = document.getElementById("flyer-supermarket")?.value;
+  const validFrom = document.getElementById("flyer-valid-from")?.value;
+  const validTo = document.getElementById("flyer-valid-to")?.value;
+
+  return {
+    title: title || null,
+    supermarket_id: supermarketId ? Number(supermarketId) : null,
+    valid_from: validFrom || null,
+    valid_to: validTo || null,
+  };
+}
+
+function setLoading(message) {
+  document.getElementById("flyer-result").innerHTML = `
+    <div class="flyer-loading">
+      <div class="spinner"></div>
+      <strong>${esc(message)}</strong>
+      <small>Nessun OCR: sto solo creando immagini pagina.</small>
+    </div>
+  `;
+}
+
+function showError(message) {
+  document.getElementById("flyer-result").innerHTML = `
+    <div class="flyer-error">
+      <strong>Errore</strong>
+      <p>${esc(message)}</p>
+    </div>
+  `;
+}
+
+async function checkHealth() {
+  const box = document.getElementById("flyer-status-card");
+  const res = await api("/admin/flyer-extractor/health");
+
+  if (!res.ok) {
+    box.className = "flyer-status-card error";
+    box.innerHTML = `<strong>Extractor non disponibile</strong><span>${esc(await readError(res))}</span>`;
+    return;
+  }
+
+  const data = await res.json();
+  box.className = "flyer-status-card ok";
+  box.innerHTML = `
+    <strong>Extractor backend attivo</strong>
+    <span>PyMuPDF: ${data.pymupdf_available ? "OK" : "MISSING"} · Pillow: ${data.pillow_available ? "OK" : "MISSING"} · No OCR: ${data.no_ocr ? "sì" : "no"}</span>
+  `;
+}
+
+async function loadSupermarkets() {
+  const select = document.getElementById("flyer-supermarket");
+  if (!select) return;
+
+  const endpoints = ["/admin/supermarkets", "/supermarket"];
+  for (const endpoint of endpoints) {
+    try {
+      const res = await api(endpoint);
+      if (res.ok) {
+        state.supermarkets = await res.json();
+        break;
+      }
+    } catch {}
+  }
+
+  select.innerHTML = `<option value="">Nessuno / da decidere</option>` + state.supermarkets.map((sm) => `
+    <option value="${sm.id}">${esc(sm.name)}</option>
+  `).join("");
+}
+
+async function uploadPdf() {
+  const file = document.getElementById("flyer-pdf")?.files?.[0];
+  if (!file) return alert("Seleziona un PDF.");
+
+  const form = commonFormData();
+  form.append("file", file);
+
+  setLoading("Estraggo pagine dal PDF...");
+  const res = await api("/admin/flyer-extractor/pdf", {
+    method: "POST",
+    body: form,
+    headers: {},
+  });
+
+  if (!res.ok) return showError(await readError(res));
+  renderResult(await res.json());
+  loadRecent();
+}
+
+async function uploadZip() {
+  const file = document.getElementById("flyer-images-zip")?.files?.[0];
+  if (!file) return alert("Seleziona uno ZIP di immagini.");
+
+  const form = commonFormData();
+  form.append("file", file);
+
+  setLoading("Importo immagini dallo ZIP...");
+  const res = await api("/admin/flyer-extractor/images-zip", {
+    method: "POST",
+    body: form,
+    headers: {},
+  });
+
+  if (!res.ok) return showError(await readError(res));
+  renderResult(await res.json());
+  loadRecent();
+}
+
+async function importUrl() {
+  const url = document.getElementById("flyer-url")?.value.trim();
+  if (!url) return alert("Inserisci un URL diretto PDF/immagine.");
+
+  const payload = { ...commonJson(), url };
+
+  setLoading("Scarico URL diretto...");
+  const res = await api("/admin/flyer-extractor/url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) return showError(await readError(res));
+  renderResult(await res.json());
+  loadRecent();
+}
+
+async function downloadProtectedFile(path, filename) {
+  const res = await api(path);
+  if (!res.ok) {
+    alert(`Download non riuscito: ${await readError(res)}`);
+    return;
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "download";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadJsonObject(obj, filename) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function copyTextSafe(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("Manifest copiato.");
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.style.position = "fixed";
+    area.style.left = "-9999px";
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+    alert("Manifest copiato.");
+  }
+}
+
+function renderResult(manifest) {
+  const pages = manifest.pages || [];
+
+  document.getElementById("flyer-result").innerHTML = `
+    <div class="flyer-result-head">
+      <div>
+        <p class="flyer-kicker">Estrazione completata</p>
+        <h3>${esc(manifest.title)}</h3>
+        <p>${pages.length} pagine · ${esc(manifest.valid_from || "inizio n/d")} → ${esc(manifest.valid_to || "fine n/d")}</p>
+      </div>
+      <div class="flyer-actions">
+        <button type="button" class="primary-btn" id="download-zip-btn">Scarica ZIP pagine</button>
+        <button type="button" class="ghost-btn" id="download-manifest-btn">Scarica manifest</button>
+        <button type="button" class="ghost-btn" id="copy-manifest-btn">Copia manifest</button>
+      </div>
+    </div>
+
+    ${manifest.contact_sheet_url ? `
+      <a class="flyer-contact-sheet" href="${absoluteUrl(manifest.contact_sheet_url)}" target="_blank" rel="noreferrer">
+        <img src="${absoluteUrl(manifest.contact_sheet_url)}" alt="Contact sheet" onerror="this.closest('.flyer-contact-sheet').insertAdjacentHTML('afterend', '<div class=&quot;flyer-error&quot;><strong>Immagini non visibili</strong><p>Il backend deve montare /static. Applica la patch v24e backend e redeploya Render.</p></div>')">
+      </a>
+    ` : ""}
+
+    <div class="flyer-pages-grid">
+      ${pages.map((page) => `
+        <a class="flyer-page-card" href="${absoluteUrl(page.image_url)}" target="_blank" rel="noreferrer">
+          <img src="${absoluteUrl(page.image_url)}" alt="Pagina ${page.page_number}">
+          <span>Pagina ${page.page_number}</span>
+        </a>
+      `).join("")}
+    </div>
+  `;
+
+  document.getElementById("download-zip-btn")?.addEventListener("click", () => {
+    const name = `${manifest.extraction_id || "flyer"}_pages.zip`;
+    downloadProtectedFile(manifest.zip_url, name);
+  });
+
+  document.getElementById("download-manifest-btn")?.addEventListener("click", () => {
+    downloadJsonObject(manifest, `${manifest.extraction_id || "flyer"}_manifest.json`);
+  });
+
+  document.getElementById("copy-manifest-btn")?.addEventListener("click", () => {
+    copyTextSafe(JSON.stringify(manifest, null, 2));
+  });
+}
+
+async function loadRecent() {
+  const box = document.getElementById("flyer-recent-list");
+  if (!box) return;
+
+  const res = await api("/admin/flyer-extractor/recent");
+  if (!res.ok) {
+    box.innerHTML = `<div class="empty-state">Errore recenti: ${esc(await readError(res))}</div>`;
+    return;
+  }
+
+  const rows = await res.json();
+  state.recent = rows;
+
+  if (!rows.length) {
+    box.innerHTML = `<div class="empty-state">Nessuna estrazione recente.</div>`;
+    return;
+  }
+
+  box.innerHTML = rows.map((item) => `
+    <button type="button" class="flyer-recent-card" data-id="${esc(item.extraction_id)}">
+      <strong>${esc(item.title)}</strong>
+      <small>${item.pages_count || 0} pagine · ${esc(item.source_type)}</small>
+    </button>
+  `).join("");
+
+  box.querySelectorAll("[data-id]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const res = await api(`/admin/flyer-extractor/${button.dataset.id}/manifest`);
+      if (!res.ok) return alert(await readError(res));
+      renderResult(await res.json());
+      document.getElementById("flyer-result")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  ensurePanel();
+  await checkHealth();
+  await loadSupermarkets();
+  await loadRecent();
+});
+
+</script>
 </body>
 </html>
