@@ -181,6 +181,24 @@ def _set_if_has(model: Any, field: str, value: Any) -> None:
         setattr(model, field, value)
 
 
+def require_recipe_extended_columns() -> None:
+    recipe_cols = {column.name for column in Recipes.__table__.columns}
+    missing = [
+        field for field in ["description", "instructions", "servings", "prep_time_minutes"]
+        if field not in recipe_cols
+    ]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Backend Recipes model missing columns: "
+                + ", ".join(missing)
+                + ". Run python scripts\\force_recipes_fields_v21.py, deploy Render, then retry."
+            ),
+        )
+
+
+
 def _parse_date(value: object) -> datetime | None:
     if not value:
         return None
@@ -338,6 +356,7 @@ def list_recipes(user: user_dependency, db: db_dependency):
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_recipe(user: user_dependency, db: db_dependency, request: RecipeCreate):
+    require_recipe_extended_columns()
     if not request.items:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aggiungi almeno un ingrediente dal catalogo")
     recipe = Recipes(name=request.name, image=request.image, owner_id=user.get("id"))
@@ -383,6 +402,24 @@ def add_daily_recipe_to_cart(user: user_dependency, db: db_dependency):
     }
 
 
+
+
+@router.get("/debug/model", status_code=status.HTTP_200_OK)
+def debug_recipe_model(user: user_dependency):
+    recipe_cols = sorted(column.name for column in Recipes.__table__.columns)
+    item_cols = sorted(column.name for column in RecipeItems.__table__.columns)
+    return {
+        "recipes_model_columns": recipe_cols,
+        "recipe_items_model_columns": item_cols,
+        "has_description": "description" in recipe_cols,
+        "has_instructions": "instructions" in recipe_cols,
+        "has_servings": "servings" in recipe_cols,
+        "has_prep_time_minutes": "prep_time_minutes" in recipe_cols,
+        "has_amount": "amount" in item_cols,
+        "has_cart_quantity": "cart_quantity" in item_cols,
+    }
+
+
 @router.get("/{recipe_id}", status_code=status.HTTP_200_OK)
 def get_recipe(user: user_dependency, db: db_dependency, recipe_id: int = Path(gt=0)):
     recipe = ensure_owned_recipe(db, recipe_id, user.get("id"))
@@ -391,6 +428,7 @@ def get_recipe(user: user_dependency, db: db_dependency, recipe_id: int = Path(g
 
 @router.put("/{recipe_id}", status_code=status.HTTP_200_OK)
 def update_recipe(user: user_dependency, db: db_dependency, recipe_id: int, request: RecipeUpdate):
+    require_recipe_extended_columns()
     recipe = ensure_owned_recipe(db, recipe_id, user.get("id"))
     recipe.name = request.name
     recipe.image = request.image

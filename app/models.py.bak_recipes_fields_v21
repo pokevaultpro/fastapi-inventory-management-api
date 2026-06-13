@@ -73,15 +73,8 @@ class Recipes(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     image = Column(String, nullable=True)
-    description = Column(Text, nullable=True)
-    servings = Column(Integer, default=1)
-    prep_time_minutes = Column(Integer, nullable=True)
-    instructions = Column(Text, nullable=True)
-    source_type = Column(String, default="personal")
-    source_url = Column(Text, nullable=True)
-    estimated_total = Column(Float, nullable=True)
-    created_at = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey('users.id'))
+
 
 class RecipeItems(Base):
     __tablename__ = 'recipe_items'
@@ -90,12 +83,7 @@ class RecipeItems(Base):
     recipe_id = Column(Integer, ForeignKey('recipes.id'))
     product_id = Column(Integer, ForeignKey('products.id'))
     quantity = Column(Integer)
-    amount = Column(Float, nullable=True)
-    amount_unit = Column(String, nullable=True)
-    note = Column(Text, nullable=True)
-    is_optional = Column(Boolean, default=False)
-    cart_quantity = Column(Integer, default=1)
-    snapshot_price = Column(Float, nullable=True)
+
 
 class Cart(Base):
     __tablename__ = 'cart'

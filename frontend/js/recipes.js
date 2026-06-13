@@ -353,6 +353,7 @@ async function openDetail(id) {
         <h2>${escapeHtml(r.name)}</h2>
         <p>${escapeHtml(r.description || "Seleziona cosa aggiungere e regola le quantità prima di creare la lista.")}</p>
         <div class="daily-meta"><span class="chip green">${euro(r.estimated_total)} totali</span><span class="chip">${r.servings} porzioni</span><span class="chip orange">${r.items_count} ingredienti</span></div>
+        ${r.instructions ? `<div class="recipe-instructions-box"><h3>Istruzioni</h3><p>${formatMultiline(r.instructions)}</p></div>` : `<div class="recipe-instructions-box muted"><h3>Istruzioni</h3><p>Nessuna istruzione salvata per questa ricetta.</p></div>`}
         <div class="detail-top-actions">
           <button type="button" class="ghost-btn" id="edit-current-recipe">Modifica</button>
           <button type="button" class="danger-btn" id="delete-current-recipe">Elimina</button>
@@ -401,6 +402,11 @@ async function addSelectedRecipeToCart() {
   document.getElementById("recipe-detail").classList.add("hidden");
   const changed = out.changed_prices?.length ? ` · ${out.changed_prices.length} prezzi cambiati` : "";
   toast(`${out.added_count} prodotti aggiunti${changed}`);
+}
+
+
+function formatMultiline(value) {
+  return escapeHtml(value).replace(/\n/g, "<br>");
 }
 
 function escapeHtml(value) {

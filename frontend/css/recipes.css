@@ -13,3 +13,36 @@
 .detail-top-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .product-result button,.ingredient-row button,.close-builder,.primary-btn,.ghost-btn,.danger-btn{cursor:pointer}
 @media(max-width:560px){.recipe-card-actions{display:grid;grid-template-columns:1fr 1fr 1fr}.ghost-mini,.danger-mini{padding:10px 8px}.detail-top-actions button{width:100%}}
+
+
+/* v18: description/instructions visibility */
+.recipe-instructions-box {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.recipe-instructions-box h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  letter-spacing: -.02em;
+  color: #0f172a;
+}
+
+.recipe-instructions-box p {
+  margin: 0 !important;
+  color: #334155 !important;
+  line-height: 1.65;
+  white-space: normal;
+}
+
+.recipe-instructions-box.muted {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.recipe-instructions-box.muted p {
+  color: #9a3412 !important;
+}
