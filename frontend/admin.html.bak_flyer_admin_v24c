@@ -6,7 +6,7 @@
   <title>Admin - SmartGrocery</title>
   <link rel="stylesheet" href="css/navbar.css">
   <link rel="stylesheet" href="css/admin.css">
-  <link rel="stylesheet" href="css/flyer-extractor-admin-v24c.css">
+  <link rel="stylesheet" href="css/flyer-extractor-admin.css">
 </head>
 <body data-page="admin">
 <header class="top-header">
@@ -146,6 +146,6 @@
 <script type="module" src="js/admin.js"></script>
 <script type="module" src="js/admin-role.js"></script>
 <script type="module" src="js/admin-history.js"></script>
-<script type="module" src="js/flyer-extractor-admin-v24c.js"></script>
+<script type="module" src="js/flyer-extractor-admin.js"></script>
 </body>
 </html>
