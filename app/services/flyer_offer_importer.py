@@ -8,7 +8,7 @@ import zipfile
 from datetime import datetime
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import text
@@ -105,7 +105,6 @@ def ensure_supermarket(db: Session, retailer: str) -> tuple[int | None, str]:
         return int(supermarket_id), retailer
     except Exception:
         db.rollback()
-        # SQLite fallback
         db.execute(
             text("INSERT INTO supermarkets (name, image, location) VALUES (:name, NULL, NULL)"),
             {"name": retailer},
@@ -155,7 +154,7 @@ def create_flyer(db: Session, *, supermarket_id: int | None, retailer: str, titl
         return int(row["id"])
 
 
-def product_rows(db: Session, supermarket_id: int | None) -> list[dict[str, Any]]:
+def preload_product_rows(db: Session, supermarket_id: int | None) -> list[dict[str, Any]]:
     rows = db.execute(
         text("""
             SELECT id, name, category, unit, supermarket_id, brand
@@ -164,42 +163,55 @@ def product_rows(db: Session, supermarket_id: int | None) -> list[dict[str, Any]
         """),
         {"sid": supermarket_id},
     ).mappings().all()
-    return [dict(row) for row in rows]
+
+    products = []
+    for row in rows:
+        d = dict(row)
+        d["_normalized_name"] = normalize_text(d.get("name"))
+        d["_normalized_brand"] = normalize_text(d.get("brand"))
+        d["_normalized_unit"] = normalize_text(d.get("unit"))
+        d["_normalized_category"] = normalize_text(d.get("category"))
+        products.append(d)
+    return products
 
 
-def alias_match(db: Session, supermarket_id: int | None, normalized_name: str) -> dict[str, Any] | None:
-    row = db.execute(
+def preload_aliases(db: Session, supermarket_id: int | None) -> dict[str, dict[str, Any]]:
+    rows = db.execute(
         text("""
-            SELECT product_id, confidence
+            SELECT product_id, normalized_alias, confidence
             FROM product_aliases
-            WHERE normalized_alias = :alias
-              AND (:sid IS NULL OR supermarket_id IS NULL OR supermarket_id = :sid)
+            WHERE (:sid IS NULL OR supermarket_id IS NULL OR supermarket_id = :sid)
             ORDER BY confidence DESC
-            LIMIT 1
         """),
-        {"alias": normalized_name, "sid": supermarket_id},
-    ).mappings().first()
-    return dict(row) if row else None
+        {"sid": supermarket_id},
+    ).mappings().all()
+
+    aliases: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        alias = row["normalized_alias"]
+        if alias not in aliases:
+            aliases[alias] = dict(row)
+    return aliases
 
 
 def compute_match_score(raw: dict[str, Any], product: dict[str, Any], normalized_name: str) -> float:
-    product_name = normalize_text(product.get("name"))
+    product_name = product.get("_normalized_name") or normalize_text(product.get("name"))
     score = SequenceMatcher(None, normalized_name, product_name).ratio()
 
     brand = normalize_text(raw.get("brand"))
-    product_brand = normalize_text(product.get("brand"))
+    product_brand = product.get("_normalized_brand") or normalize_text(product.get("brand"))
     if brand and product_brand and brand == product_brand:
         score += 0.08
     elif brand and brand in product_name:
         score += 0.05
 
     raw_unit = normalize_text(raw.get("unit"))
-    product_unit = normalize_text(product.get("unit"))
+    product_unit = product.get("_normalized_unit") or normalize_text(product.get("unit"))
     if raw_unit and product_unit and raw_unit == product_unit:
         score += 0.05
 
     raw_category = normalize_text(raw.get("category"))
-    product_category = normalize_text(product.get("category"))
+    product_category = product.get("_normalized_category") or normalize_text(product.get("category"))
     if raw_category and product_category and raw_category == product_category:
         score += 0.03
 
@@ -209,17 +221,29 @@ def compute_match_score(raw: dict[str, Any], product: dict[str, Any], normalized
     return min(score, 1.0)
 
 
-def suggest_match(db: Session, raw: dict[str, Any], supermarket_id: int | None) -> tuple[int | None, str, float]:
-    normalized_name = normalize_text(raw.get("name") or raw.get("raw_name") or raw.get("product_name"))
-    alias = alias_match(db, supermarket_id, normalized_name)
+def suggest_match_fast(
+    raw: dict[str, Any],
+    normalized_name: str,
+    product_candidates: list[dict[str, Any]],
+    aliases: dict[str, dict[str, Any]],
+) -> tuple[int | None, str, float]:
+    alias = aliases.get(normalized_name)
     if alias:
         return int(alias["product_id"]), "auto_matched_alias", float(alias.get("confidence") or 1)
 
-    candidates = product_rows(db, supermarket_id)
+    # Fast shortlist: compare against all only if needed, but skip obvious unrelated names
+    raw_words = {w for w in normalized_name.split() if len(w) >= 4}
     best_id = None
     best_score = 0.0
 
-    for product in candidates:
+    for product in product_candidates:
+        product_name = product.get("_normalized_name", "")
+        product_words = {w for w in product_name.split() if len(w) >= 4}
+
+        # If there is no overlap at all, only compare very short catalog names.
+        if raw_words and product_words and not (raw_words & product_words) and len(product_words) > 1:
+            continue
+
         score = compute_match_score(raw, product, normalized_name)
         if score > best_score:
             best_score = score
@@ -278,7 +302,6 @@ def copy_image_from_zip(z: zipfile.ZipFile, raw: dict[str, Any], target_dir: Pat
 
     source = str(source).lstrip("/")
     if source not in z.namelist():
-        # Try common product_images prefix.
         alt = f"product_images/{Path(source).name}"
         if alt in z.namelist():
             source = alt
@@ -341,6 +364,13 @@ def insert_offer(db: Session, params: dict[str, Any]) -> int:
 
 
 def import_zip_to_draft(db: Session, zip_path: Path, *, import_name: str | None = None) -> dict[str, Any]:
+    """
+    v26d speed fix:
+    - product catalog is loaded once, not once per flyer product
+    - aliases are loaded once
+    - one commit at the end
+    """
+    started_at = datetime.now()
     ensure_flyer_offer_schema(engine)
 
     if not zip_path.exists():
@@ -357,6 +387,9 @@ def import_zip_to_draft(db: Session, zip_path: Path, *, import_name: str | None 
         title = get_title(payload, import_name or zip_path.stem)
         supermarket_id, retailer = ensure_supermarket(db, retailer)
         flyer_id = create_flyer(db, supermarket_id=supermarket_id, retailer=retailer, title=title, payload=payload)
+
+        product_candidates = preload_product_rows(db, supermarket_id)
+        aliases = preload_aliases(db, supermarket_id)
 
         image_folder_name = f"{slugify(title)}_{uuid4().hex[:8]}"
         target_dir = Path("static") / "images" / "flyer_offers" / image_folder_name
@@ -386,7 +419,7 @@ def import_zip_to_draft(db: Session, zip_path: Path, *, import_name: str | None 
                 continue
 
             normalized_name = normalize_text(raw_name)
-            suggested_id, match_status, score = suggest_match(db, raw, supermarket_id)
+            suggested_id, match_status, score = suggest_match_fast(raw, normalized_name, product_candidates, aliases)
             pt = price_type(raw)
             pu = price_unit(raw, pt)
             page = parse_float(raw.get("flyer_page") or raw.get("page"))
@@ -432,76 +465,18 @@ def import_zip_to_draft(db: Session, zip_path: Path, *, import_name: str | None 
 
         db.commit()
 
+    elapsed_seconds = round((datetime.now() - started_at).total_seconds(), 2)
     return {
         "flyer_id": flyer_id,
         "retailer": retailer,
         "title": title,
         "products_in_json": len(products),
         "offer_ids": created_ids,
-        "errors": errors,
+        "errors": errors[:30],
+        "elapsed_seconds": elapsed_seconds,
+        "product_candidates_loaded": len(product_candidates),
         **counters,
     }
-
-
-def create_product_from_offer(db: Session, offer_id: int, *, create_alias: bool = True) -> int:
-    offer = db.execute(text("SELECT * FROM flyer_offers WHERE id = :id"), {"id": offer_id}).mappings().first()
-    if not offer:
-        raise ValueError("Offer not found")
-
-    supermarket_id = db.execute(
-        text("SELECT supermarket_id FROM flyers WHERE id = :id"),
-        {"id": offer["flyer_id"]},
-    ).scalar()
-
-    # Product gets stable/catalog info. Price is initialized from offer_price, but active offer lives in flyer_offers.
-    params = {
-        "name": offer["raw_name"],
-        "category": offer["category"] or "Altro",
-        "original_price": offer["offer_price"],
-        "discounted_price": None,
-        "unit": offer["unit"] or offer["price_unit"] or "pz",
-        "supermarket_id": supermarket_id,
-        "aisle_order": offer["flyer_page"] or 999,
-        "image": offer["image"],
-        "brand": offer["brand"],
-        "price_type": offer["price_type"],
-        "price_unit": offer["price_unit"],
-        "flyer_page": offer["flyer_page"],
-        "flyer_valid_from": offer["valid_from"],
-        "flyer_valid_to": offer["valid_to"],
-        "flyer_source": offer["source"],
-        "flyer_source_url": offer["source_url"],
-        "offer_note": offer["offer_note"],
-    }
-
-    columns = [row["name"] for row in db.execute(text("""
-        SELECT column_name AS name FROM information_schema.columns WHERE table_name='products'
-    """)).mappings().all()] if engine.dialect.name == "postgresql" else [
-        row["name"] for row in db.execute(text("PRAGMA table_info(products)")).mappings().all()
-    ]
-
-    base_fields = ["name", "category", "original_price", "discounted_price", "unit", "supermarket_id", "aisle_order", "image"]
-    optional = [k for k in params.keys() if k in columns and k not in base_fields]
-    fields = base_fields + optional
-
-    sql = f"INSERT INTO products ({', '.join(fields)}) VALUES ({', '.join(':'+f for f in fields)})"
-    if engine.dialect.name == "postgresql":
-        sql += " RETURNING id"
-        product_id = db.execute(text(sql), {k: params[k] for k in fields}).scalar()
-    else:
-        db.execute(text(sql), {k: params[k] for k in fields})
-        product_id = db.execute(text("SELECT max(id) FROM products")).scalar()
-
-    db.execute(
-        text("UPDATE flyer_offers SET product_id=:pid, suggested_product_id=:pid, match_status='created_product', status='approved' WHERE id=:oid"),
-        {"pid": product_id, "oid": offer_id},
-    )
-
-    if create_alias:
-        add_alias(db, product_id=int(product_id), supermarket_id=supermarket_id, alias_name=offer["raw_name"])
-
-    db.commit()
-    return int(product_id)
 
 
 def add_alias(db: Session, *, product_id: int, supermarket_id: int | None, alias_name: str) -> None:
@@ -543,3 +518,66 @@ def associate_offer(db: Session, *, offer_id: int, product_id: int, create_alias
     if create_alias:
         add_alias(db, product_id=product_id, supermarket_id=flyer["supermarket_id"] if flyer else None, alias_name=offer["raw_name"])
     db.commit()
+
+
+def _product_columns(db: Session) -> set[str]:
+    if engine.dialect.name == "postgresql":
+        rows = db.execute(text("SELECT column_name AS name FROM information_schema.columns WHERE table_name='products'")).mappings().all()
+        return {row["name"] for row in rows}
+    rows = db.execute(text("PRAGMA table_info(products)")).mappings().all()
+    return {row["name"] for row in rows}
+
+
+def create_product_from_offer(db: Session, offer_id: int, *, create_alias: bool = True) -> int:
+    offer = db.execute(text("SELECT * FROM flyer_offers WHERE id = :id"), {"id": offer_id}).mappings().first()
+    if not offer:
+        raise ValueError("Offer not found")
+
+    supermarket_id = db.execute(
+        text("SELECT supermarket_id FROM flyers WHERE id = :id"),
+        {"id": offer["flyer_id"]},
+    ).scalar()
+
+    params = {
+        "name": offer["raw_name"],
+        "category": offer["category"] or "Altro",
+        "original_price": offer["offer_price"],
+        "discounted_price": None,
+        "unit": offer["unit"] or offer["price_unit"] or "pz",
+        "supermarket_id": supermarket_id,
+        "aisle_order": offer["flyer_page"] or 999,
+        "image": offer["image"],
+        "brand": offer["brand"],
+        "price_type": offer["price_type"],
+        "price_unit": offer["price_unit"],
+        "flyer_page": offer["flyer_page"],
+        "flyer_valid_from": offer["valid_from"],
+        "flyer_valid_to": offer["valid_to"],
+        "flyer_source": offer["source"],
+        "flyer_source_url": offer["source_url"],
+        "offer_note": offer["offer_note"],
+    }
+
+    columns = _product_columns(db)
+    base_fields = ["name", "category", "original_price", "discounted_price", "unit", "supermarket_id", "aisle_order", "image"]
+    optional = [k for k in params.keys() if k in columns and k not in base_fields]
+    fields = base_fields + optional
+
+    sql = f"INSERT INTO products ({', '.join(fields)}) VALUES ({', '.join(':'+f for f in fields)})"
+    if engine.dialect.name == "postgresql":
+        sql += " RETURNING id"
+        product_id = db.execute(text(sql), {k: params[k] for k in fields}).scalar()
+    else:
+        db.execute(text(sql), {k: params[k] for k in fields})
+        product_id = db.execute(text("SELECT max(id) FROM products")).scalar()
+
+    db.execute(
+        text("UPDATE flyer_offers SET product_id=:pid, suggested_product_id=:pid, match_status='created_product', status='approved' WHERE id=:oid"),
+        {"pid": product_id, "oid": offer_id},
+    )
+
+    if create_alias:
+        add_alias(db, product_id=int(product_id), supermarket_id=supermarket_id, alias_name=offer["raw_name"])
+
+    db.commit()
+    return int(product_id)

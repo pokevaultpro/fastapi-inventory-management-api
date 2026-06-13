@@ -66,11 +66,12 @@ function ensurePanel() {
     <section class="flyer-offers-upload">
       <div>
         <h3>Import ZIP in bozza</h3>
-        <p>Non crea prodotti subito. Crea offerte draft, con auto-match dove possibile.</p>
+        <p>Non crea prodotti subito. Crea offerte draft, con auto-match dove possibile. Con v26d mostra lo stato import.</p>
       </div>
       <input id="flyer-offers-zip" type="file" accept=".zip,application/zip">
       <input id="flyer-offers-import-name" placeholder="Nome import opzionale">
       <button type="button" class="primary-btn" id="flyer-offers-import-btn">Importa bozza</button>
+      <div id="flyer-offers-import-status" class="flyer-import-status"></div>
     </section>
 
     <div class="flyer-offers-layout">
@@ -123,6 +124,19 @@ function bindEvents() {
   document.getElementById("flyer-offers-publish")?.addEventListener("click", publishFlyer);
 }
 
+function setImportStatus(message, busy = false) {
+  const el = document.getElementById("flyer-offers-import-status");
+  const btn = document.getElementById("flyer-offers-import-btn");
+  if (el) {
+    el.textContent = message || "";
+    el.classList.toggle("busy", busy);
+  }
+  if (btn) {
+    btn.disabled = busy;
+    btn.textContent = busy ? "Import in corso..." : "Importa bozza";
+  }
+}
+
 async function importZip() {
   const file = document.getElementById("flyer-offers-zip")?.files?.[0];
   if (!file) return alert("Seleziona uno ZIP.");
@@ -132,14 +146,31 @@ async function importZip() {
   const importName = document.getElementById("flyer-offers-import-name").value.trim();
   if (importName) form.append("import_name", importName);
 
-  const res = await api("/admin/flyer-offers/import-zip", { method: "POST", body: form });
-  if (!res.ok) return alert(await readError(res));
+  setImportStatus(`Sto caricando e analizzando ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB). Attendi, non ricaricare la pagina...`, true);
 
-  const data = await res.json();
-  alert(`Import completato: ${data.created_draft_offers} offerte draft, ${data.auto_matched} auto-match, ${data.needs_review} da controllare, ${data.new_product_suggestion} nuovi.`);
-  state.selectedFlyerId = data.flyer_id;
-  await loadFlyers();
-  await loadOffers();
+  try {
+    const res = await api("/admin/flyer-offers/import-zip", { method: "POST", body: form });
+    if (!res.ok) {
+      setImportStatus("Import fallito.");
+      return alert(await readError(res));
+    }
+
+    const data = await res.json();
+    setImportStatus(`Completato in ${data.elapsed_seconds ?? "?"}s: ${data.created_draft_offers} offerte, ${data.auto_matched} auto, ${data.needs_review} da controllare, ${data.new_product_suggestion} nuovi.`);
+    alert(`Import completato: ${data.created_draft_offers} offerte draft, ${data.auto_matched} auto-match, ${data.needs_review} da controllare, ${data.new_product_suggestion} nuovi.`);
+    state.selectedFlyerId = data.flyer_id;
+    await loadFlyers();
+    await loadOffers();
+  } catch (err) {
+    setImportStatus("Import interrotto o timeout del browser. Controlla se il volantino compare nella lista, altrimenti riprova dopo la patch v26d.");
+    alert(err?.message || "Errore durante import.");
+  } finally {
+    const btn = document.getElementById("flyer-offers-import-btn");
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Importa bozza";
+    }
+  }
 }
 
 async function loadFlyers() {

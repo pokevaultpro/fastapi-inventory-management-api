@@ -189,3 +189,16 @@
     flex-wrap: wrap;
   }
 }
+
+/* v26d import status */
+.flyer-import-status {
+  grid-column: 1 / -1;
+  min-height: 22px;
+  color: #475569;
+  font-weight: 850;
+  font-size: 13px;
+}
+
+.flyer-import-status.busy::before {
+  content: "⏳ ";
+}
