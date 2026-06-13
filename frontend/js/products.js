@@ -52,7 +52,13 @@ function isOfferActive(product) {
 }
 
 const hasDiscount = (p) => isOfferActive(p) && Number(p.discounted_price) > 0 && Number(p.discounted_price) < Number(p.original_price);
+const priceType = (p) => String(p.price_type || "fixed").toLowerCase();
+const priceUnit = (p) => p.price_unit || p.unit || (priceType(p) === "weight" ? "kg" : "pz");
 const finalPrice = (p) => hasDiscount(p) ? Number(p.discounted_price) : Number(p.original_price || 0);
+const priceText = (p) => {
+  if (priceType(p) === "manual" && !Number(p.original_price || 0)) return "Da inserire";
+  return formatEuro(finalPrice(p));
+};
 const discountPercent = (p) => {
   if (p.discount_percent) return Math.round(Number(p.discount_percent));
   if (!hasDiscount(p)) return 0;
@@ -310,6 +316,8 @@ function createProductCard(p) {
   card.innerHTML = `
     <div class="card-image-shell">
       ${sale ? `<div class="discount-badge">-${discountPercent(p)}%</div>` : ""}
+      ${priceType(p) === "weight" ? `<div class="variable-product-badge">⚖️ al peso</div>` : ""}
+      ${priceType(p) === "manual" ? `<div class="variable-product-badge manual">✍️ manuale</div>` : ""}
       ${page ? `<div class="flyer-page-badge">📄 Volantino p.${page}</div>` : ""}
       ${!isOfferActive(p) && p.discounted_price ? `<div class="expired-badge">offerta scaduta</div>` : ""}
       <button class="fav-icon ${favorite ? "active" : ""}" type="button" aria-label="Preferito">
@@ -325,11 +333,11 @@ function createProductCard(p) {
       </div>
 
       <div class="product-name">${escapeHtml(p.name)}</div>
-      <div class="product-unit">${escapeHtml(p.unit || "pz")}</div>
+      <div class="product-unit">${priceType(p) === "weight" ? `Prezzo al ${escapeHtml(priceUnit(p))}` : escapeHtml(p.unit || "pz")}</div>
 
       <div class="price-line">
-        ${sale ? `<span class="old-price">${formatEuro(p.original_price)}</span><span class="new-price">${formatEuro(p.discounted_price)}</span>` : `<span class="regular-price">${formatEuro(p.original_price)}</span>`}
-        <span class="unit-price">/ ${escapeHtml(p.unit || "pz")}</span>
+        ${sale ? `<span class="old-price">${formatEuro(p.original_price)}</span><span class="new-price">${formatEuro(p.discounted_price)}</span>` : `<span class="regular-price">${priceText(p)}</span>`}
+        <span class="unit-price">${priceType(p) === "manual" ? "in lista" : `/ ${escapeHtml(priceUnit(p))}`}</span>
       </div>
 
       <div class="card-footer">

@@ -583,3 +583,23 @@ body {
   text-transform: uppercase;
   letter-spacing: .04em;
 }
+
+
+/* v20: badges per prodotti al peso/manuali */
+.variable-product-badge {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 3;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, .88);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 950;
+  box-shadow: 0 12px 30px rgba(15,23,42,.18);
+}
+
+.variable-product-badge.manual {
+  background: rgba(29, 78, 216, .9);
+}

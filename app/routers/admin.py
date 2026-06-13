@@ -91,7 +91,7 @@ def serialize_product(product: Products) -> dict:
     for key in [
         "brand", "flyer_page", "flyer_valid_from", "flyer_valid_to",
         "flyer_source", "flyer_source_url", "is_lidl_plus", "flyer_imported_at",
-        "offer_note", "discount_percent", "location", "calories", "fat",
+        "offer_note", "discount_percent", "price_type", "price_unit", "location", "calories", "fat",
         "carbs", "protein", "aisle_order",
     ]:
         base.setdefault(key, getattr(product, key, None))
@@ -142,7 +142,7 @@ def serialize_recipe(db: Session, recipe: Recipes) -> dict:
 class AdminProductIn(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     category: str = Field(default="Altro", max_length=100)
-    original_price: float = Field(gt=0)
+    original_price: float = Field(ge=0)
     discounted_price: Optional[float] = Field(default=None, gt=0)
     unit: str = Field(default="pz", max_length=60)
     supermarket_id: int = Field(gt=0)
@@ -162,12 +162,14 @@ class AdminProductIn(BaseModel):
     is_lidl_plus: bool = False
     offer_note: Optional[str] = None
     discount_percent: Optional[float] = None
+    price_type: str = Field(default="fixed", pattern="^(fixed|weight|manual)$")
+    price_unit: Optional[str] = None
 
 
 class AdminProductPatch(BaseModel):
     name: Optional[str] = None
     category: Optional[str] = None
-    original_price: Optional[float] = Field(default=None, gt=0)
+    original_price: Optional[float] = Field(default=None, ge=0)
     discounted_price: Optional[float] = Field(default=None, gt=0)
     unit: Optional[str] = None
     supermarket_id: Optional[int] = Field(default=None, gt=0)
@@ -187,6 +189,8 @@ class AdminProductPatch(BaseModel):
     is_lidl_plus: Optional[bool] = None
     offer_note: Optional[str] = None
     discount_percent: Optional[float] = None
+    price_type: Optional[str] = Field(default=None, pattern="^(fixed|weight|manual)$")
+    price_unit: Optional[str] = None
 
 
 class AdminSupermarketIn(BaseModel):

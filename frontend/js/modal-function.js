@@ -32,6 +32,15 @@ function isOfferActive(item) {
   return end >= new Date();
 }
 
+function priceType(item) {
+  const value = String(item?.price_type || "fixed").toLowerCase();
+  return ["fixed", "weight", "manual"].includes(value) ? value : "fixed";
+}
+
+function priceUnit(item) {
+  return item?.price_unit || item?.unit || (priceType(item) === "weight" ? "kg" : "pz");
+}
+
 function hasDiscount(item) {
   return isOfferActive(item) && Number(item.discounted_price) > 0 && Number(item.discounted_price) < Number(item.original_price);
 }
@@ -56,13 +65,17 @@ export function openProductModal(item, supermarket = {}) {
   if (sale) {
     document.getElementById("modal-price").innerHTML = `
       <span class="discounted">${formatEuro(item.original_price)}</span>
-      <span class="final-price">${formatEuro(item.discounted_price)}</span>
+      <span class="final-price">${formatEuro(item.discounted_price)} / ${priceUnit(item)}</span>
     `;
     const badge = document.getElementById("modal-discount-badge");
     badge.textContent = `-${discountPercent(item)}%`;
     badge.classList.remove("hidden");
   } else {
-    document.getElementById("modal-price").innerHTML = `<span class="final-price">${formatEuro(item.original_price)}</span>`;
+    if (priceType(item) === "manual" && !Number(item.original_price || 0)) {
+      document.getElementById("modal-price").innerHTML = `<span class="final-price">Prezzo finale da inserire in lista</span>`;
+    } else {
+      document.getElementById("modal-price").innerHTML = `<span class="final-price">${formatEuro(item.original_price)}${priceType(item) === "weight" ? ` / ${priceUnit(item)}` : ""}</span>`;
+    }
     document.getElementById("modal-discount-badge").classList.add("hidden");
   }
 

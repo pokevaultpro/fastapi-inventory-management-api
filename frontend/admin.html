@@ -61,6 +61,14 @@
         <label>Categoria *<input id="product-category" placeholder="Es. Pane e prodotti da forno" value="Altro" required></label>
         <label>Marca<input id="product-brand" placeholder="Es. Lidl, Barilla..."></label>
         <label>Unità / formato<input id="product-unit" placeholder="Es. 500 g, 1 L, pz" value="pz"></label>
+        <label>Tipo prezzo
+          <select id="product-price-type">
+            <option value="fixed">Prezzo fisso</option>
+            <option value="weight">Al peso / al kg</option>
+            <option value="manual">Prezzo manuale in lista</option>
+          </select>
+        </label>
+        <label>Unità prezzo<input id="product-price-unit" placeholder="Es. pz, kg, g, L" value="pz"></label>
         <label>Supermercato *<select id="product-supermarket" required></select></label>
 
         <div class="form-section-title">Prezzi e ordinamento</div>

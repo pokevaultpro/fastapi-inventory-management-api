@@ -160,12 +160,19 @@ async function loadProducts() {
   renderProducts();
 }
 
+function priceTypeLabel(p) {
+  const value = p?.price_type || "fixed";
+  if (value === "weight") return "al peso";
+  if (value === "manual") return "manuale";
+  return "fisso";
+}
+
 function renderProducts() {
   document.getElementById("products-table").innerHTML = state.products.map(p => `
     <div class="admin-row">
       <img src="${img(p.image)}" onerror="this.src='/static/images/placeholder.jpg'">
       <div><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.brand || p.category || "")}</small></div>
-      <div>${escapeHtml(p.supermarket_name || "")}<small>${escapeHtml(p.unit || "pz")} · aisle ${p.aisle_order ?? "n/d"}</small></div>
+      <div>${escapeHtml(p.supermarket_name || "")}<small>${escapeHtml(priceTypeLabel(p))} · ${escapeHtml(p.price_unit || p.unit || "pz")} · aisle ${p.aisle_order ?? "n/d"}</small></div>
       <div><b>${euro(p.discounted_price || p.original_price)}</b><small>${p.discounted_price ? `orig. ${euro(p.original_price)}` : ""}</small></div>
       <div>${p.flyer_page ? `Volantino p.${p.flyer_page}` : ""}<small>${escapeHtml(p.location || "")}</small></div>
       <div class="row-actions"><button class="edit-btn" data-edit-product="${p.id}">Edit</button><button class="delete-btn" data-delete-product="${p.id}">Del</button></div>
@@ -186,6 +193,8 @@ function editProduct(id) {
   document.getElementById("product-category").value = p.category || "Altro";
   document.getElementById("product-brand").value = p.brand || "";
   document.getElementById("product-unit").value = p.unit || "pz";
+  document.getElementById("product-price-type").value = p.price_type || "fixed";
+  document.getElementById("product-price-unit").value = p.price_unit || p.unit || "pz";
   document.getElementById("product-original").value = p.original_price || "";
   document.getElementById("product-discounted").value = p.discounted_price || "";
   document.getElementById("product-supermarket").value = p.supermarket_id || "";
@@ -219,6 +228,8 @@ function resetProductForm() {
   document.getElementById("product-id").value = "";
   document.getElementById("product-category").value = "Altro";
   document.getElementById("product-unit").value = "pz";
+  document.getElementById("product-price-type").value = "fixed";
+  document.getElementById("product-price-unit").value = "pz";
   document.getElementById("product-save-btn").textContent = "Salva prodotto";
   clearProductError();
 }
@@ -226,23 +237,32 @@ function resetProductForm() {
 function buildProductPayload() {
   const name = valueOrNull("product-name");
   const category = valueOrNull("product-category") || "Altro";
-  const originalPrice = numberOrNull("product-original");
+  const priceType = valueOrNull("product-price-type") || "fixed";
+  const priceUnit = valueOrNull("product-price-unit") || valueOrNull("product-unit") || (priceType === "weight" ? "kg" : "pz");
+  let originalPrice = numberOrNull("product-original");
   const supermarketId = numberOrNull("product-supermarket");
 
   if (!name) throw new Error("Manca il nome prodotto.");
   if (!category) throw new Error("Manca la categoria.");
-  if (!originalPrice || originalPrice <= 0) throw new Error("Il prezzo originale deve essere maggiore di 0.");
   if (!supermarketId) throw new Error("Devi selezionare un supermercato. Se non c'è, crealo prima nella tab Supermercati.");
 
-  const discounted = numberOrNull("product-discounted");
+  if (priceType === "manual") {
+    originalPrice = originalPrice ?? 0;
+  } else if (originalPrice == null || originalPrice <= 0) {
+    throw new Error(priceType === "weight" ? "Per i prodotti al peso devi inserire il prezzo al kg maggiore di 0." : "Il prezzo originale deve essere maggiore di 0.");
+  }
 
+  const discounted = numberOrNull("product-discounted");
   if (discounted != null && discounted <= 0) throw new Error("Il prezzo scontato deve essere maggiore di 0 oppure lasciato vuoto.");
+  if (discounted != null && priceType === "manual") throw new Error("Per un prodotto a prezzo manuale non usare prezzo scontato: inserirai il totale nella lista.");
 
   return {
     name,
     category,
     brand: valueOrNull("product-brand"),
-    unit: valueOrNull("product-unit") || "pz",
+    unit: valueOrNull("product-unit") || (priceType === "weight" ? priceUnit : "pz"),
+    price_type: priceType,
+    price_unit: priceUnit,
     original_price: originalPrice,
     discounted_price: discounted,
     supermarket_id: supermarketId,

@@ -353,6 +353,8 @@ async def get_all_purchased_products(
                 "average_unit_price": 0,
                 "discounted_quantity": 0,
                 "discounted_share": 0,
+                "total_weight": 0,
+                "manual_price_lines": 0,
                 "favorite_product": None,
                 "favorite_category": None,
                 "favorite_supermarket": None,
@@ -375,6 +377,8 @@ async def get_all_purchased_products(
     total_quantity = 0
     total_spent = 0.0
     discounted_quantity = 0
+    total_weight = 0.0
+    manual_price_lines = 0
 
     for item in items:
         qty = int(item.quantity or 1)
@@ -385,6 +389,11 @@ async def get_all_purchased_products(
 
         if item.was_discounted:
             discounted_quantity += qty
+
+        item_weight = float(getattr(item, "weight_bought", 0) or 0)
+        total_weight += item_weight
+        if getattr(item, "was_manual_price", False):
+            manual_price_lines += 1
 
         category = item.category or "Senza categoria"
         supermarket = item.supermarket_name or "N/D"
@@ -413,6 +422,10 @@ async def get_all_purchased_products(
                 "first_bought_at": bought_at,
                 "last_bought_at": bought_at,
                 "last_price_paid": unit_price,
+                "price_type": getattr(item, "price_type", None),
+                "price_unit": getattr(item, "price_unit", None),
+                "total_weight": 0.0,
+                "manual_price_lines": 0,
             }
 
         row = products[key]
@@ -423,6 +436,9 @@ async def get_all_purchased_products(
         if item.was_discounted:
             row["discounted_quantity"] += qty
             row["discounted_lines"] += 1
+        row["total_weight"] += item_weight
+        if getattr(item, "was_manual_price", False):
+            row["manual_price_lines"] += 1
 
         first_dt = _parse_datetime(row["first_bought_at"])
         last_dt = _parse_datetime(row["last_bought_at"])
@@ -436,6 +452,7 @@ async def get_all_purchased_products(
     for row in products.values():
         row["total"] = _round_money(row["total"])
         row["average_unit_price"] = _round_money(row["total"] / row["quantity"] if row["quantity"] else 0)
+        row["total_weight"] = _round_money(row.get("total_weight", 0))
         product_rows.append(row)
 
     product_rows.sort(key=lambda r: (-int(r["quantity"] or 0), -float(r["total"] or 0), str(r["name"] or "")))
@@ -452,6 +469,8 @@ async def get_all_purchased_products(
             "average_unit_price": _round_money(total_spent / total_quantity if total_quantity else 0),
             "discounted_quantity": discounted_quantity,
             "discounted_share": _round_money((discounted_quantity / total_quantity * 100) if total_quantity else 0),
+            "total_weight": _round_money(total_weight),
+            "manual_price_lines": manual_price_lines,
             "favorite_product": favorite_product,
             "favorite_category": {"name": favorite_category[0], "total": _round_money(favorite_category[1])} if favorite_category[0] else None,
             "favorite_supermarket": {"name": favorite_supermarket[0], "total": _round_money(favorite_supermarket[1])} if favorite_supermarket[0] else None,

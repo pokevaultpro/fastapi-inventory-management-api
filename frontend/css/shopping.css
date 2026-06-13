@@ -812,3 +812,74 @@ button, .shopping-item {
 }
 
 
+
+
+/* v20: prodotti al peso / prezzo manuale */
+.variable-price-item {
+  align-items: flex-start;
+}
+
+.variable-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 7px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.variable-badge.manual {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.variable-summary {
+  margin-top: 5px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.variable-price-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+  padding: 9px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.variable-price-controls label {
+  display: grid;
+  gap: 4px;
+  min-width: 118px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.variable-price-controls input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 8px 9px;
+  font-weight: 850;
+  color: #0f172a;
+  background: white;
+}
+
+@media (max-width: 720px) {
+  .variable-price-controls {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

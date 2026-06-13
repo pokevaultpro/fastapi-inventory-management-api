@@ -158,7 +158,7 @@ function productCard(p) {
         <b>${hpEscape(p.name)}</b>
         <small>${hpEscape(p.category || "Categoria n/d")} · ${hpEscape(p.supermarket_name || "N/D")}</small>
         <div class="purchased-product-meta">
-          <span>${p.quantity || 0} pz</span>
+          <span>${p.quantity || 0} pz${p.total_weight ? ` · ${String(p.total_weight).replace(".", ",")} ${p.price_unit || "kg"}` : ""}</span>
           <span>${hpEuro(p.total)}</span>
           <span>ultimo: ${hpDate(p.last_bought_at)}</span>
         </div>
@@ -192,7 +192,7 @@ function renderAllPurchasedProducts() {
         <b>${hpEscape(p.name)}</b>
         <small>${hpEscape(p.category || "Categoria n/d")} · ${hpEscape(p.supermarket_name || "N/D")} · ${hpEscape(p.unit || "pz")}</small>
       </div>
-      <div><strong>${p.quantity || 0}</strong><small>quantità</small></div>
+      <div><strong>${p.quantity || 0}${p.total_weight ? ` / ${String(p.total_weight).replace(".", ",")} ${p.price_unit || "kg"}` : ""}</strong><small>quantità / peso</small></div>
       <div><strong>${p.lines || 0}</strong><small>acquisti</small></div>
       <div><strong>${hpEuro(p.total)}</strong><small>totale</small></div>
       <div><strong>${hpEuro(p.average_unit_price)}</strong><small>medio</small></div>
