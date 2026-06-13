@@ -1,0 +1,76 @@
+.conad-cleanup-box {
+  margin: 16px 0;
+  padding: 18px;
+  border: 1px solid #fecaca;
+  border-radius: 24px;
+  background: #fff7f7;
+  box-shadow: 0 18px 45px rgba(127, 29, 29, .08);
+}
+
+.conad-cleanup-box h3 {
+  margin: 4px 0;
+  color: #7f1d1d;
+}
+
+.conad-cleanup-box p {
+  margin: 0 0 12px;
+  color: #64748b;
+  font-weight: 750;
+}
+
+.conad-cleanup-grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(160px, 220px) 1fr;
+  gap: 10px;
+  align-items: end;
+}
+
+.conad-cleanup-grid label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-weight: 900;
+}
+
+.conad-cleanup-grid input:not([type="checkbox"]) {
+  min-height: 42px;
+  border: 1px solid #fca5a5;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: #fff;
+  color: #0f172a;
+  font-weight: 850;
+}
+
+.conad-cleanup-grid .check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+}
+
+.conad-cleanup-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.conad-cleanup-output {
+  margin: 13px 0 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 16px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+  .conad-cleanup-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -344,7 +344,6 @@
 
 </style>
   <link rel="stylesheet" href="css/flyer-offers-admin-v26.css">
-  <link rel="stylesheet" href="css/conad-cleanup-admin-v26c.css">
 </head>
 <body data-page="admin">
 <header class="top-header">
@@ -1055,6 +1054,5 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 </script>
 <script type="module" src="js/flyer-offers-admin-v26.js"></script>
-<script type="module" src="js/conad-cleanup-admin-v26c.js"></script>
 </body>
 </html>
