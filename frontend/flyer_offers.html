@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartGrocery - Offerte volantini</title>
+  <link rel="stylesheet" href="css/flyer-offers-page-v26h.css" />
+</head>
+<body>
+  <main class="page-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">SmartGrocery Admin</p>
+        <h1>Offerte volantini</h1>
+        <p>Pagina separata e leggera per gestire draft, match, nuovi prodotti e pubblicazione.</p>
+      </div>
+      <a class="ghost-link" href="admin.html">Torna ad Admin</a>
+    </header>
+
+    <section class="panel">
+      <div class="panel-title">
+        <div>
+          <h2>Volantini importati</h2>
+          <p>Seleziona un volantino. Le offerte vengono caricate 25 alla volta.</p>
+        </div>
+        <button id="refreshFlyers" class="primary">Aggiorna</button>
+      </div>
+      <div id="flyersList" class="flyers-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">
+        <div>
+          <h2>Offerte</h2>
+          <p id="currentFlyerLabel">Nessun volantino selezionato.</p>
+        </div>
+      </div>
+
+      <div class="filters">
+        <select id="matchFilter">
+          <option value="">Tutti i match</option>
+          <option value="auto_matched">Auto-match</option>
+          <option value="needs_review">Da controllare</option>
+          <option value="new_product_suggestion">Nuovi prodotti</option>
+          <option value="bulk_matched">Bulk matched</option>
+          <option value="created_product">Creati</option>
+        </select>
+
+        <select id="statusFilter">
+          <option value="">Tutti gli stati</option>
+          <option value="draft">Draft</option>
+          <option value="approved">Approvate</option>
+          <option value="published">Pubblicate</option>
+          <option value="rejected">Scartate</option>
+        </select>
+
+        <button id="approveAuto" class="secondary">Approva auto-match</button>
+        <button id="repairImages" class="secondary">Ripara immagini</button>
+        <button id="publishFlyer" class="primary">Pubblica approvate</button>
+      </div>
+
+      <div class="bulkbar">
+        <label><input type="checkbox" id="selectPage" /> Seleziona pagina</label>
+        <span id="selectedCount">0 selezionate</span>
+        <button id="bulkApprove" class="secondary">Approva selezionate</button>
+        <button id="bulkAssociate" class="secondary">Associa suggeriti</button>
+        <button id="bulkCreate" class="primary">Crea prodotti</button>
+        <button id="bulkReject" class="danger">Scarta</button>
+      </div>
+
+      <div id="offersMeta" class="meta"></div>
+      <div id="offersList" class="offers-list empty">Seleziona un volantino.</div>
+
+      <div class="pager">
+        <button id="prevPage" class="secondary">Indietro</button>
+        <span id="pageInfo">Pagina 0</span>
+        <button id="nextPage" class="secondary">Avanti</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="js/flyer-offers-page-v26h.js"></script>
+</body>
+</html>
