@@ -22,7 +22,6 @@ from app.routers import flyer_offer_admin, flyer_offer_public
 from app.routers import admin_cleanup
 from app.routers import flyer_offer_page_admin
 from app.routers import flyer_offer_image_zip_repair
-from app.routers import flyer_offer_product_prices
 
 
 
@@ -95,4 +94,3 @@ app.include_router(flyer_offer_public.router)
 app.include_router(admin_cleanup.router)
 app.include_router(flyer_offer_page_admin.router)
 app.include_router(flyer_offer_image_zip_repair.router)
-app.include_router(flyer_offer_product_prices.router)

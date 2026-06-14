@@ -6,7 +6,6 @@
   <title>SmartGrocery - Offerte volantini</title>
   <link rel="stylesheet" href="css/flyer-offers-page-v26h.css" />
   <link rel="stylesheet" href="css/flyer-offer-images-zip-repair-v26j.css" />
-  <link rel="stylesheet" href="css/flyer-offer-apply-prices-v26l.css" />
 </head>
 <body>
   <main class="page-shell">
@@ -83,6 +82,5 @@
 
   <script type="module" src="js/flyer-offers-page-v26h.js"></script>
   <script type="module" src="js/flyer-offer-images-zip-repair-v26j.js"></script>
-  <script type="module" src="js/flyer-offer-apply-prices-v26l.js"></script>
 </body>
 </html>

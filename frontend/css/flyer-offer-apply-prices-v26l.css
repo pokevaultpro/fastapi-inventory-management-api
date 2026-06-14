@@ -1,0 +1,44 @@
+.apply-prices-box-v26l {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 22px;
+  background: #eff6ff;
+}
+
+.apply-prices-box-v26l strong {
+  display: block;
+  color: #1d4ed8;
+  font-size: 16px;
+  font-weight: 1000;
+}
+
+.apply-prices-box-v26l p {
+  margin: 4px 0 0;
+  color: #475569;
+  font-weight: 750;
+  font-size: 13px;
+}
+
+.apply-prices-output-v26l {
+  grid-column: 1 / -1;
+  max-height: 220px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border-radius: 16px;
+  background: #172554;
+  color: #dbeafe;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 1000px) {
+  .apply-prices-box-v26l {
+    grid-template-columns: 1fr;
+  }
+}
