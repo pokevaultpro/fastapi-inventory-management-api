@@ -94,3 +94,18 @@ https://TUO-SITO/weekly-menu.html
 ## PDF
 
 Il PDF viene generato lato frontend con jsPDF via CDN e prova a includere le immagini delle ricette/prodotti.
+
+
+## v27c PDF polish
+
+Migliorie:
+
+- PDF più pulito e moderno
+- header verde con riepilogo pasti/costo
+- card settimanali più leggibili
+- pagina dettaglio ricette più elegante
+- caricamento immagini PDF più robusto:
+  - normalizza `www` / non-`www`
+  - prova fetch
+  - fallback canvas
+  - rileva formato PNG/JPEG/WEBP
