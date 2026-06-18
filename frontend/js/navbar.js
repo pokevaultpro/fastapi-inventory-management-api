@@ -64,6 +64,7 @@ function navigate(tab) {
   if (tab === "products") window.location.href = "products.html";
   if (tab === "history") window.location.href = "history.html";
   if (tab === "recipes") window.location.href = "recipes.html";
+  if (tab === "weekly-menu" || tab === "menu") window.location.href = "weekly-menu.html";
   if (tab === "supermarkets") window.location.href = "supermarkets.html";
   if (tab === "profile") window.location.href = "profile.html";
   if (tab === "admin") window.location.href = "admin.html";

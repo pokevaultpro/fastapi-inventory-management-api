@@ -96,3 +96,8 @@ app.include_router(admin_cleanup.router)
 app.include_router(flyer_offer_page_admin.router)
 app.include_router(flyer_offer_image_zip_repair.router)
 app.include_router(flyer_offer_product_prices.router)
+
+# SmartGrocery weekly menu v27
+from app.routers import weekly_menus as smartgrocery_weekly_menus
+app.include_router(smartgrocery_weekly_menus.router)
+

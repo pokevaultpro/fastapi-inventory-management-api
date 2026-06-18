@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartGrocery - Menu Settimanale</title>
+  <link rel="stylesheet" href="css/navbar.css" />
+  <link rel="stylesheet" href="css/bottom-bar.css" />
+  <link rel="stylesheet" href="css/weekly-menu.css" />
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+</head>
+<body data-page="weekly-menu">
+<header class="top-header">
+  <div class="header-inner">
+    <div class="header-left">
+      <div class="logo-icon">
+        <svg class="cart-svg" viewBox="0 0 24 24" fill="none" stroke="white">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M2.5 3h2l1.6 9.5a2 2 0 002 1.7h8.4a2 2 0 001.9-1.4l2.1-6.8H6.1" />
+          <circle cx="9" cy="19" r="1.5" />
+          <circle cx="17" cy="19" r="1.5" />
+        </svg>
+      </div>
+      <span class="header-logo">SmartGrocery</span>
+    </div>
+
+    <nav class="header-right">
+      <button class="nav-pill" data-tab="home" onclick="navigate('home')">Home</button>
+      <button class="nav-pill" data-tab="list" onclick="navigate('list')">List</button>
+      <button class="nav-pill" data-tab="products" onclick="navigate('products')">Prodotti</button>
+      <button class="nav-pill" data-tab="recipes" onclick="navigate('recipes')">Ricette</button>
+      <button class="nav-pill" data-tab="weekly-menu" onclick="navigate('weekly-menu')">Menu</button>
+      <button class="nav-pill" data-tab="supermarkets" onclick="navigate('supermarkets')">Negozi</button>
+      <button class="nav-pill" data-tab="profile" onclick="navigate('profile')">Profilo</button>
+    </nav>
+  </div>
+</header>
+
+<main class="weekly-shell">
+  <section class="hero-card">
+    <div class="hero-copy">
+      <p class="eyebrow">Smart planner</p>
+      <h1>Menu settimanale</h1>
+      <p>Organizza colazione, pranzo, spuntino e cena con le tue ricette. Poi scarichi il PDF bello pronto o aggiungi gli ingredienti alla lista della spesa.</p>
+    </div>
+
+    <div class="week-controls">
+      <button id="prevWeek" class="ghost-btn" type="button">← Settimana</button>
+      <input id="weekStart" type="date" />
+      <button id="nextWeek" class="ghost-btn" type="button">Settimana →</button>
+      <button id="duplicateWeek" class="secondary-btn" type="button">Duplica prossima</button>
+      <button id="addToCart" class="secondary-btn" type="button">Lista spesa</button>
+      <button id="downloadPdf" class="primary-btn" type="button">Scarica PDF</button>
+    </div>
+  </section>
+
+  <section class="stats-grid">
+    <article class="stat-card"><span>Periodo</span><strong id="weekRange">-</strong></article>
+    <article class="stat-card"><span>Pasti pianificati</span><strong id="plannedCount">0</strong></article>
+    <article class="stat-card"><span>Costo stimato</span><strong id="estimatedTotal">€0,00</strong></article>
+    <article class="stat-card"><span>Ricette disponibili</span><strong id="recipesCount">0</strong></article>
+  </section>
+
+  <section id="plannerGrid" class="planner-grid" aria-live="polite"></section>
+</main>
+
+<div id="recipeModal" class="recipe-modal hidden">
+  <div class="recipe-modal-backdrop" data-close-modal></div>
+  <section class="recipe-modal-panel">
+    <header class="modal-head">
+      <div>
+        <p class="eyebrow" id="modalSlotLabel">Scegli ricetta</p>
+        <h2>Seleziona una ricetta</h2>
+      </div>
+      <button class="icon-btn" data-close-modal type="button">✕</button>
+    </header>
+    <div class="modal-tools">
+      <input id="recipeSearch" type="search" placeholder="Cerca ricetta..." />
+      <a class="secondary-link" href="recipes.html">Crea nuova ricetta</a>
+    </div>
+    <div id="recipePickerList" class="recipe-picker-list"></div>
+  </section>
+</div>
+
+<div id="toast" class="weekly-toast"></div>
+
+<div id="bottom-bar-container"></div>
+<script>
+fetch("bottom-bar.html")
+  .then(r => r.text())
+  .then(html => {
+    document.getElementById("bottom-bar-container").innerHTML = html;
+    const script = document.createElement("script");
+    script.type = "module";
+    script.src = "js/quick-actions.js";
+    document.body.appendChild(script);
+  });
+</script>
+<script src="js/api.js"></script>
+<script src="js/navbar.js"></script>
+<script type="module" src="js/weekly-menu.js"></script>
+</body>
+</html>
