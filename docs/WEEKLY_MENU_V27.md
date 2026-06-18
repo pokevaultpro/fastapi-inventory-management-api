@@ -109,3 +109,12 @@ Migliorie:
   - prova fetch
   - fallback canvas
   - rileva formato PNG/JPEG/WEBP
+
+
+## v27d PDF giornaliero
+
+- Prima pagina: overview settimanale
+- Poi 7 pagine: una per ogni giorno della settimana
+- In ogni pagina giornaliera: card grandi per colazione, pranzo, spuntino, cena
+- Ultima sezione: ingredienti ricetta per ricetta con immagini grandi
+- Mantiene il fix immagini PDF del v27c

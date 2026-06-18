@@ -137,14 +137,9 @@ function normalizeImageUrl(path) {
   if (!path) return `${window.location.origin}/static/images/placeholder.jpg`;
 
   let url = String(path).trim();
-
-  // Se è path relativo, usa sempre il dominio del frontend, non quello del backend.
   if (url.startsWith("/")) return `${window.location.origin}${url}`;
   if (!/^https?:\/\//i.test(url)) return `${window.location.origin}/${url}`;
 
-  // Caso frequente: immagine assoluta su pokevaultpro.com ma pagina su www.pokevaultpro.com, o viceversa.
-  // L'immagine si vede nel sito, ma il fetch per PDF può fallire per CORS.
-  // Se hostname è lo stesso dominio base, forzo origin corrente.
   try {
     const parsed = new URL(url);
     const current = new URL(window.location.origin);
@@ -164,6 +159,10 @@ function imageOrPlaceholder(path) {
 
 function getItem(dayIndex, mealType) {
   return (currentMenu?.items || []).find(i => Number(i.day_index) === Number(dayIndex) && i.meal_type === mealType) || null;
+}
+
+function getDayItems(dayIndex) {
+  return MEALS.map(meal => ({ meal, item: getItem(dayIndex, meal.id) }));
 }
 
 function renderStats() {
@@ -369,7 +368,10 @@ function showToast(message) {
 }
 
 /* =========================
-   PDF bello + immagini robuste
+   PDF export
+   1 pagina overview
+   7 pagine giornaliere
+   pagine finali con ingredienti ricetta per ricetta
    ========================= */
 
 async function downloadPdf() {
@@ -380,16 +382,21 @@ async function downloadPdf() {
   }
 
   try {
-    showToast("Creo PDF...");
+    showToast("Creo PDF settimanale...");
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
 
-    drawPlannerPage(doc);
+    await drawPlannerOverviewPage(doc);
+
+    for (const day of DAYS) {
+      doc.addPage("a4", "portrait");
+      await drawDayPage(doc, day);
+    }
 
     const usedItems = currentMenu.items.filter(i => i.recipe);
     if (usedItems.length) {
       doc.addPage("a4", "portrait");
-      await drawRecipeDetails(doc, usedItems);
+      await drawRecipeDetailsSection(doc, usedItems);
     }
 
     doc.save(`menu-settimanale-${toISO(currentWeekStart)}.pdf`);
@@ -400,7 +407,7 @@ async function downloadPdf() {
   }
 }
 
-async function drawPlannerPage(doc) {
+async function drawPlannerOverviewPage(doc) {
   const pageW = 297;
   const pageH = 210;
   const margin = 9;
@@ -409,19 +416,17 @@ async function drawPlannerPage(doc) {
   const colW = (pageW - margin * 2) / 7;
   const slotH = 33;
 
-  // Background
   doc.setFillColor(246, 251, 247);
   doc.rect(0, 0, pageW, pageH, "F");
 
-  // Header band
   doc.setFillColor(...PDF_GREEN);
   doc.roundedRect(margin, 8, pageW - margin * 2, headerH, 5, 5, "F");
 
   doc.setFillColor(255, 255, 255);
-  doc.setGState?.(new doc.GState({ opacity: 0.14 }));
+  if (doc.setGState) doc.setGState(new doc.GState({ opacity: 0.14 }));
   doc.circle(pageW - 36, 20, 18, "F");
   doc.circle(pageW - 15, 12, 10, "F");
-  doc.setGState?.(new doc.GState({ opacity: 1 }));
+  if (doc.setGState) doc.setGState(new doc.GState({ opacity: 1 }));
 
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
@@ -436,11 +441,10 @@ async function drawPlannerPage(doc) {
     27
   );
 
-  // Summary pills
-  drawPill(doc, pageW - 93, 14, 34, 7, `${currentMenu.summary.planned_meals || 0} pasti`);
-  drawPill(doc, pageW - 55, 14, 38, 7, money(currentMenu.summary.estimated_total || 0));
+  drawSummaryPill(doc, pageW - 111, 14, 32, 7, `${currentMenu.summary.planned_meals || 0} pasti`);
+  drawSummaryPill(doc, pageW - 76, 14, 30, 7, `${countDaysWithMeals()} giorni`);
+  drawSummaryPill(doc, pageW - 42, 14, 34, 7, money(currentMenu.summary.estimated_total || 0));
 
-  // Day columns
   for (const day of DAYS) {
     const x = margin + day.index * colW;
     const dayDate = addDays(currentWeekStart, day.index);
@@ -467,35 +471,43 @@ async function drawPlannerPage(doc) {
       const meal = MEALS[mi];
       const y = startY + 12 + mi * slotH;
       const item = getItem(day.index, meal.id);
-      await drawPdfSlot(doc, x + 2.5, y, colW - 5, slotH - 3.5, meal, item);
+      await drawMiniSlot(doc, x + 2.5, y, colW - 5, slotH - 3.5, meal, item);
     }
   }
 
   doc.setTextColor(...PDF_MUTED);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
-  doc.text("Creato con SmartGrocery", pageW / 2, pageH - 5, { align: "center" });
+  doc.text("Pagina 1 · panoramica completa della settimana", pageW / 2, pageH - 5, { align: "center" });
 }
 
-function drawPill(doc, x, y, w, h, text) {
+function countDaysWithMeals() {
+  let count = 0;
+  for (const day of DAYS) {
+    if (getDayItems(day.index).some(({ item }) => !!item?.recipe)) count += 1;
+  }
+  return count;
+}
+
+function drawSummaryPill(doc, x, y, w, h, text) {
   doc.setFillColor(255, 255, 255);
-  doc.setGState?.(new doc.GState({ opacity: 0.22 }));
+  if (doc.setGState) doc.setGState(new doc.GState({ opacity: 0.22 }));
   doc.roundedRect(x, y, w, h, 3.5, 3.5, "F");
-  doc.setGState?.(new doc.GState({ opacity: 1 }));
+  if (doc.setGState) doc.setGState(new doc.GState({ opacity: 1 }));
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
+  doc.setFontSize(6.8);
   doc.text(text, x + w / 2, y + 4.9, { align: "center" });
 }
 
-async function drawPdfSlot(doc, x, y, w, h, meal, item) {
+async function drawMiniSlot(doc, x, y, w, h, meal, item) {
   doc.setDrawColor(...PDF_LINE);
   doc.setFillColor(...PDF_BG);
   doc.roundedRect(x, y, w, h, 3, 3, "FD");
 
   doc.setTextColor(...PDF_GREEN_DARK);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.4);
+  doc.setFontSize(6.3);
   doc.text(`${meal.label}`, x + 2, y + 4.8);
 
   if (!item?.recipe) {
@@ -508,14 +520,12 @@ async function drawPdfSlot(doc, x, y, w, h, meal, item) {
 
   const recipe = item.recipe;
   const image = await loadPdfImage(recipe.image);
-
   const imgX = x + 2;
   const imgY = y + 7;
   const imgSize = 11.5;
 
   doc.setFillColor(...PDF_GREEN_SOFT);
   doc.roundedRect(imgX, imgY, imgSize, imgSize, 2.2, 2.2, "F");
-
   if (image?.data) {
     try {
       doc.addImage(image.data, image.format, imgX, imgY, imgSize, imgSize, undefined, "FAST");
@@ -526,7 +536,7 @@ async function drawPdfSlot(doc, x, y, w, h, meal, item) {
 
   doc.setTextColor(...PDF_SLATE);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.6);
+  doc.setFontSize(6.45);
   const titleLines = doc.splitTextToSize(recipe.name || "", w - 17);
   doc.text(titleLines.slice(0, 3), x + 15.2, y + 9.5);
 
@@ -543,72 +553,268 @@ async function drawPdfSlot(doc, x, y, w, h, meal, item) {
   doc.text(money(recipe.estimated_total), x + w - 4, y + h - 3.4, { align: "right" });
 }
 
-async function drawRecipeDetails(doc, items) {
+async function drawDayPage(doc, day) {
   const pageW = 210;
   const pageH = 297;
-  let y = 15;
+  const margin = 12;
+  const gap = 6;
+  const cardW = (pageW - margin * 2 - gap) / 2;
+  const cardH = 109;
+  const startY = 52;
+  const pageDate = addDays(currentWeekStart, day.index);
+  const entries = getDayItems(day.index);
+  const filledCount = entries.filter(({ item }) => !!item?.recipe).length;
+  const dayTotal = entries.reduce((sum, { item }) => sum + Number(item?.recipe?.estimated_total || 0), 0);
 
-  doc.setFillColor(246, 251, 247);
+  doc.setFillColor(247, 252, 249);
   doc.rect(0, 0, pageW, pageH, "F");
 
   doc.setFillColor(...PDF_GREEN);
-  doc.roundedRect(12, 10, pageW - 24, 20, 5, 5, "F");
+  doc.roundedRect(12, 10, pageW - 24, 26, 6, 6, "F");
+
+  doc.setFillColor(255, 255, 255);
+  if (doc.setGState) doc.setGState(new doc.GState({ opacity: 0.14 }));
+  doc.circle(pageW - 28, 19, 15, "F");
+  doc.circle(pageW - 12, 13, 7, "F");
+  if (doc.setGState) doc.setGState(new doc.GState({ opacity: 1 }));
 
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text("Dettaglio ricette", 18, 23);
+  doc.setFontSize(18);
+  doc.text(day.label, 18, 21);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(fullDate(pageDate), 18, 28);
 
-  y = 40;
+  drawHeaderMiniPill(doc, pageW - 69, 15, 25, 7, `${filledCount} ric.`);
+  drawHeaderMiniPill(doc, pageW - 41, 15, 24, 7, money(dayTotal));
 
-  const unique = [];
-  const seen = new Set();
-  for (const item of items) {
-    if (!item.recipe || seen.has(item.recipe.id)) continue;
-    seen.add(item.recipe.id);
-    unique.push(item.recipe);
+  for (let i = 0; i < entries.length; i++) {
+    const row = Math.floor(i / 2);
+    const col = i % 2;
+    const x = margin + col * (cardW + gap);
+    const y = startY + row * (cardH + 8);
+    await drawDayRecipeCard(doc, x, y, cardW, cardH, entries[i].meal, entries[i].item);
   }
 
-  for (const recipe of unique) {
-    if (y > 238) {
-      doc.addPage("a4", "portrait");
-      doc.setFillColor(246, 251, 247);
-      doc.rect(0, 0, pageW, pageH, "F");
-      y = 15;
-    }
+  doc.setTextColor(...PDF_MUTED);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.text(`Pagina giorno · ${day.label}`, pageW / 2, pageH - 6, { align: "center" });
+}
 
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(...PDF_LINE);
-    doc.roundedRect(12, y, pageW - 24, 52, 6, 6, "FD");
+function drawHeaderMiniPill(doc, x, y, w, h, text) {
+  doc.setFillColor(255, 255, 255);
+  if (doc.setGState) doc.setGState(new doc.GState({ opacity: 0.2 }));
+  doc.roundedRect(x, y, w, h, 3, 3, "F");
+  if (doc.setGState) doc.setGState(new doc.GState({ opacity: 1 }));
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.7);
+  doc.text(text, x + w / 2, y + 4.8, { align: "center" });
+}
 
-    const image = await loadPdfImage(recipe.image);
-    doc.setFillColor(...PDF_GREEN_SOFT);
-    doc.roundedRect(17, y + 7, 36, 36, 4, 4, "F");
-    if (image?.data) {
-      try {
-        doc.addImage(image.data, image.format, 17, y + 7, 36, 36, undefined, "FAST");
-      } catch (err) {
-        console.warn("PDF detail image skipped", recipe.image, err);
-      }
-    }
+async function drawDayRecipeCard(doc, x, y, w, h, meal, item) {
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...PDF_LINE);
+  doc.roundedRect(x, y, w, h, 6, 6, "FD");
 
-    doc.setTextColor(...PDF_SLATE);
+  doc.setFillColor(...PDF_GREEN_SOFT);
+  doc.roundedRect(x + 4, y + 4, 34, 8, 3, 3, "F");
+  doc.setTextColor(...PDF_GREEN_DARK);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.3);
+  doc.text(`${meal.emoji} ${meal.label}`, x + 8, y + 9.2);
+
+  const imageY = y + 16;
+  const imageH = 48;
+  doc.setFillColor(241, 245, 249);
+  doc.roundedRect(x + 4, imageY, w - 8, imageH, 5, 5, "F");
+
+  if (!item?.recipe) {
+    doc.setTextColor(148, 163, 184);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text(doc.splitTextToSize(recipe.name || "", 132).slice(0, 2), 60, y + 13);
-
+    doc.setFontSize(11);
+    doc.text("Nessuna ricetta", x + w / 2, imageY + 22, { align: "center" });
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(...PDF_MUTED);
-    doc.setFontSize(8);
-    doc.text(`${recipe.items_count || 0} ingredienti · ${recipe.servings || 1} porzioni · ${money(recipe.estimated_total)}`, 60, y + 26);
-
-    const ingredients = (recipe.items || [])
-      .slice(0, 6)
-      .map(i => `• ${i.product?.name || "Ingrediente"} x${i.cart_quantity || i.quantity || 1}`);
-    doc.text(doc.splitTextToSize(ingredients.join("\n"), 132), 60, y + 35);
-
-    y += 60;
+    doc.setFontSize(8.5);
+    doc.text("Puoi usare questo spazio come giorno libero o pasto fuori casa.", x + w / 2, imageY + 30, { align: "center" });
+    return;
   }
+
+  const recipe = item.recipe;
+  const image = await loadPdfImage(recipe.image);
+  if (image?.data) {
+    try {
+      doc.addImage(image.data, image.format, x + 4, imageY, w - 8, imageH, undefined, "FAST");
+    } catch (err) {
+      console.warn("PDF day image skipped", recipe.image, err);
+    }
+  }
+
+  const textX = x + 5;
+  let cursorY = imageY + imageH + 8;
+
+  doc.setTextColor(...PDF_SLATE);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11.2);
+  const titleLines = doc.splitTextToSize(recipe.name || "", w - 10).slice(0, 2);
+  doc.text(titleLines, textX, cursorY);
+  cursorY += 6.3 * titleLines.length + 1;
+
+  const meta = [];
+  if (recipe.prep_time_minutes) meta.push(`${recipe.prep_time_minutes} min`);
+  meta.push(`${recipe.servings || 1} porz.`);
+  meta.push(`${recipe.items_count || 0} ingredienti`);
+  meta.push(money(recipe.estimated_total));
+
+  drawInlineTags(doc, textX, cursorY, meta, w - 10);
+  cursorY += 11;
+
+  const desc = recipe.description || recipe.instructions || "Ricetta selezionata per questo momento della giornata.";
+  doc.setTextColor(...PDF_MUTED);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.2);
+  const descLines = doc.splitTextToSize(cleanSnippet(desc), w - 10).slice(0, 5);
+  doc.text(descLines, textX, cursorY);
+}
+
+function drawInlineTags(doc, startX, y, tags, maxWidth) {
+  let x = startX;
+  for (const tag of tags) {
+    const text = String(tag || "");
+    const w = Math.min(34, Math.max(18, doc.getTextWidth(text) + 8));
+    if (x + w > startX + maxWidth) break;
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(x, y - 4.3, w, 6.8, 2.6, 2.6, "FD");
+    doc.setTextColor(...PDF_MUTED);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.text(text, x + w / 2, y, { align: "center" });
+    x += w + 3;
+  }
+}
+
+async function drawRecipeDetailsSection(doc, items) {
+  const uniqueRecipes = dedupeRecipes(items.map(i => i.recipe).filter(Boolean));
+  let pageIndex = 0;
+  let y = 36;
+  const pageW = 210;
+  const pageH = 297;
+  const cardH = 78;
+  const gap = 7;
+
+  renderRecipeSectionHeader(doc, pageIndex + 1);
+
+  for (const recipe of uniqueRecipes) {
+    if (y + cardH > 285) {
+      doc.addPage("a4", "portrait");
+      pageIndex += 1;
+      renderRecipeSectionHeader(doc, pageIndex + 1);
+      y = 36;
+    }
+    await drawRecipeDetailCard(doc, 12, y, pageW - 24, cardH, recipe);
+    y += cardH + gap;
+  }
+}
+
+function renderRecipeSectionHeader(doc, pageNumber) {
+  const pageW = 210;
+  const pageH = 297;
+  doc.setFillColor(247, 252, 249);
+  doc.rect(0, 0, pageW, pageH, "F");
+  doc.setFillColor(...PDF_GREEN);
+  doc.roundedRect(12, 10, pageW - 24, 18, 5, 5, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.text("Ingredienti ricetta per ricetta", 18, 22);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.8);
+  doc.text(`Sezione finale · pagina ${pageNumber}`, pageW - 18, 22, { align: "right" });
+}
+
+function dedupeRecipes(list) {
+  const seen = new Set();
+  const out = [];
+  for (const recipe of list) {
+    if (!recipe?.id || seen.has(recipe.id)) continue;
+    seen.add(recipe.id);
+    out.push(recipe);
+  }
+  return out;
+}
+
+async function drawRecipeDetailCard(doc, x, y, w, h, recipe) {
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...PDF_LINE);
+  doc.roundedRect(x, y, w, h, 6, 6, "FD");
+
+  const imgX = x + 5;
+  const imgY = y + 6;
+  const imgW = 45;
+  const imgH = 45;
+
+  doc.setFillColor(...PDF_GREEN_SOFT);
+  doc.roundedRect(imgX, imgY, imgW, imgH, 4, 4, "F");
+  const image = await loadPdfImage(recipe.image);
+  if (image?.data) {
+    try {
+      doc.addImage(image.data, image.format, imgX, imgY, imgW, imgH, undefined, "FAST");
+    } catch (err) {
+      console.warn("PDF detail image skipped", recipe.image, err);
+    }
+  }
+
+  const textX = x + 55;
+  doc.setTextColor(...PDF_SLATE);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11.8);
+  doc.text(doc.splitTextToSize(recipe.name || "", w - 62).slice(0, 2), textX, y + 12);
+
+  doc.setTextColor(...PDF_MUTED);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  const metaLine = `${recipe.items_count || 0} ingredienti · ${recipe.servings || 1} porzioni · ${recipe.prep_time_minutes ? `${recipe.prep_time_minutes} min · ` : ""}${money(recipe.estimated_total)}`;
+  doc.text(metaLine, textX, y + 22);
+
+  const ingredientLines = buildIngredientLines(recipe.items || []);
+  doc.setTextColor(...PDF_SLATE);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.1);
+  doc.text(doc.splitTextToSize(ingredientLines.join("
+"), w - 62).slice(0, 7), textX, y + 31);
+
+  const note = recipe.description || recipe.instructions;
+  if (note) {
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(x + 5, y + 56, w - 10, 16, 3, 3, "F");
+    doc.setTextColor(...PDF_MUTED);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.4);
+    doc.text(doc.splitTextToSize(cleanSnippet(note), w - 16).slice(0, 2), x + 8, y + 63);
+  }
+}
+
+function buildIngredientLines(items) {
+  if (!items.length) return ["• Nessun ingrediente salvato"];
+  const lines = items.slice(0, 8).map(i => {
+    const productName = i.product?.name || i.ingredient_name || "Ingrediente";
+    const qty = i.cart_quantity || i.quantity || 1;
+    const unit = i.unit || "";
+    return `• ${productName} × ${qty}${unit ? ` ${unit}` : ""}`;
+  });
+  if (items.length > 8) lines.push(`• + altri ${items.length - 8} ingredienti`);
+  return lines;
+}
+
+function cleanSnippet(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .replace(/
++/g, " ")
+    .trim();
 }
 
 const imageCache = new Map();
@@ -619,7 +825,6 @@ async function loadPdfImage(path) {
   const url = normalizeImageUrl(path);
   if (imageCache.has(url)) return imageCache.get(url);
 
-  // 1) Fetch diretto: funziona bene per same-origin e server con CORS.
   try {
     const res = await fetch(url, { mode: "cors", cache: "force-cache" });
     if (res.ok) {
@@ -634,7 +839,6 @@ async function loadPdfImage(path) {
     console.warn("PDF fetch image failed, trying canvas", url, err);
   }
 
-  // 2) Fallback canvas: spesso risolve immagini visibili nel sito ma non fetchabili.
   try {
     const data = await imageToCanvasDataURL(url);
     const result = { data, format: "JPEG" };
@@ -659,17 +863,14 @@ function imageToCanvasDataURL(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
 
-    // Per same-origin non dà problemi; per cross-origin serve header CORS.
     try {
       const parsed = new URL(url);
-      if (parsed.origin !== window.location.origin) {
-        img.crossOrigin = "anonymous";
-      }
+      if (parsed.origin !== window.location.origin) img.crossOrigin = "anonymous";
     } catch {}
 
     img.onload = () => {
       try {
-        const size = 420;
+        const size = 720;
         const canvas = document.createElement("canvas");
         canvas.width = size;
         canvas.height = size;
@@ -683,9 +884,8 @@ function imageToCanvasDataURL(url) {
         const h = img.naturalHeight * scale;
         const x = (size - w) / 2;
         const y = (size - h) / 2;
-
         ctx.drawImage(img, x, y, w, h);
-        resolve(canvas.toDataURL("image/jpeg", 0.88));
+        resolve(canvas.toDataURL("image/jpeg", 0.9));
       } catch (err) {
         reject(err);
       }
