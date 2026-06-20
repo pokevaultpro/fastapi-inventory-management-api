@@ -1,20 +1,21 @@
 import CONFIG from "./config.js";
+console.log("weekly-menu v27h menu notes loaded");
 
 const DAYS = [
-  { index: 0, label: "Lunedì", short: "Lun" },
-  { index: 1, label: "Martedì", short: "Mar" },
-  { index: 2, label: "Mercoledì", short: "Mer" },
-  { index: 3, label: "Giovedì", short: "Gio" },
-  { index: 4, label: "Venerdì", short: "Ven" },
+  { index: 0, label: "Lunedi", short: "Lun" },
+  { index: 1, label: "Martedi", short: "Mar" },
+  { index: 2, label: "Mercoledi", short: "Mer" },
+  { index: 3, label: "Giovedi", short: "Gio" },
+  { index: 4, label: "Venerdi", short: "Ven" },
   { index: 5, label: "Sabato", short: "Sab" },
   { index: 6, label: "Domenica", short: "Dom" },
 ];
 
 const MEALS = [
-  { id: "breakfast", label: "Colazione", emoji: "☕" },
-  { id: "lunch", label: "Pranzo", emoji: "🍝" },
-  { id: "snack", label: "Spuntino", emoji: "🍎" },
-  { id: "dinner", label: "Cena", emoji: "🍽️" },
+  { id: "breakfast", label: "Colazione", emoji: "" },
+  { id: "lunch", label: "Pranzo", emoji: "" },
+  { id: "snack", label: "Spuntino", emoji: "" },
+  { id: "dinner", label: "Cena", emoji: "" },
 ];
 
 const PDF_GREEN = [22, 163, 74];
@@ -157,17 +158,22 @@ function imageOrPlaceholder(path) {
   return path || "/static/images/placeholder.jpg";
 }
 
-function getItem(dayIndex, mealType) {
-  return (currentMenu?.items || []).find(i => Number(i.day_index) === Number(dayIndex) && i.meal_type === mealType) || null;
+function getItems(dayIndex, mealType) {
+  return (currentMenu?.items || []).filter(i => Number(i.day_index) === Number(dayIndex) && i.meal_type === mealType);
 }
 
-function getDayItems(dayIndex) {
-  return MEALS.map(meal => ({ meal, item: getItem(dayIndex, meal.id) }));
+function getItem(dayIndex, mealType) {
+  return getItems(dayIndex, mealType)[0] || null;
+}
+
+function getDayItems(dayIndex, includeEmpty = true) {
+  const entries = MEALS.map(meal => ({ meal, items: getItems(dayIndex, meal.id) }));
+  return includeEmpty ? entries : entries.filter(entry => entry.items.length > 0);
 }
 
 function renderStats() {
   const end = addDays(currentWeekStart, 6);
-  $("weekRange").textContent = `${formatDate(currentWeekStart)} → ${formatDate(end)}`;
+  $("weekRange").textContent = `${formatDate(currentWeekStart)} -> ${formatDate(end)}`;
   $("plannedCount").textContent = currentMenu?.summary?.planned_meals || 0;
   $("estimatedTotal").textContent = money(currentMenu?.summary?.estimated_total || 0);
   $("recipesCount").textContent = recipes.length;
@@ -206,17 +212,14 @@ function renderPlanner() {
 }
 
 function renderMealSlot(day, meal) {
-  const item = getItem(day.index, meal.id);
-  const recipe = item?.recipe;
+  const items = getItems(day.index, meal.id);
 
-  if (!recipe) {
+  if (!items.length) {
     return `
-      <section class="meal-slot">
+      <section class="meal-slot meal-slot-empty-compact">
         <div class="slot-top">
-          <span class="slot-label">${meal.emoji} ${meal.label}</span>
-          <button class="add-slot-btn" type="button" data-add-slot data-day="${day.index}" data-meal="${meal.id}">+</button>
+          <button class="add-slot-btn" type="button" data-add-slot data-day="${day.index}" data-meal="${meal.id}">+ ${meal.label}</button>
         </div>
-        <div class="empty-slot">Aggiungi ricetta</div>
       </section>
     `;
   }
@@ -224,22 +227,28 @@ function renderMealSlot(day, meal) {
   return `
     <section class="meal-slot filled">
       <div class="slot-top">
-        <span class="slot-label">${meal.emoji} ${meal.label}</span>
+        <span class="slot-label">${meal.label}</span>
+        <button class="add-slot-btn" type="button" data-add-slot data-day="${day.index}" data-meal="${meal.id}">+ altra</button>
       </div>
-      <div class="recipe-slot-card">
-        <img src="${escapeAttr(imageOrPlaceholder(recipe.image))}" alt="${escapeAttr(recipe.name)}" />
-        <div>
-          <h4>${escapeHTML(recipe.name)}</h4>
-          <div class="recipe-meta">
-            <span>${recipe.prep_time_minutes ? `${recipe.prep_time_minutes} min` : "tempo n/d"}</span>
-            <span>${recipe.servings || 1} porz.</span>
-            <span>${money(recipe.estimated_total)}</span>
-          </div>
-        </div>
-      </div>
-      <div class="slot-actions">
-        <button class="secondary-btn" type="button" data-change-slot data-day="${day.index}" data-meal="${meal.id}">Cambia</button>
-        <button class="danger-btn" type="button" data-remove-item="${item.id}">Rimuovi</button>
+      <div class="recipe-stack">
+        ${items.map(item => {
+          const recipe = item.recipe;
+          return `
+            <article class="recipe-slot-card">
+              <img src="${escapeAttr(imageOrPlaceholder(recipe.image))}" alt="${escapeAttr(recipe.name)}" />
+              <div>
+                <h4>${escapeHTML(recipe.name)}</h4>
+                ${item.notes ? `<p class="menu-item-note">${escapeHTML(item.notes)}</p>` : ""}
+                <div class="recipe-meta">
+                  <span>${recipe.prep_time_minutes ? `${recipe.prep_time_minutes} min` : "tempo n/d"}</span>
+                  <span>${recipe.servings || 1} porz.</span>
+                  <span>${money(recipe.estimated_total)}</span>
+                </div>
+              </div>
+              <button class="remove-mini-btn" type="button" data-remove-item="${item.id}" title="Rimuovi">x</button>
+            </article>
+          `;
+        }).join("")}
       </div>
     </section>
   `;
@@ -249,8 +258,10 @@ function openRecipeModal(dayIndex, mealType) {
   activeSlot = { dayIndex, mealType };
   const day = DAYS.find(d => d.index === dayIndex);
   const meal = MEALS.find(m => m.id === mealType);
-  $("modalSlotLabel").textContent = `${day?.label || ""} · ${meal?.label || ""}`;
+  $("modalSlotLabel").textContent = `${day?.label || ""} - ${meal?.label || ""}`;
   $("recipeSearch").value = "";
+  const noteEl = $("menuRecipeNote");
+  if (noteEl) noteEl.value = "";
   renderRecipePicker();
   $("recipeModal").classList.remove("hidden");
 }
@@ -281,7 +292,7 @@ function renderRecipePicker() {
       <img src="${escapeAttr(imageOrPlaceholder(recipe.image))}" alt="${escapeAttr(recipe.name)}" />
       <div>
         <h3>${escapeHTML(recipe.name)}</h3>
-        <p>${recipe.items_count || 0} ingredienti · ${recipe.prep_time_minutes ? `${recipe.prep_time_minutes} min · ` : ""}${money(recipe.estimated_total)}</p>
+        <p>${recipe.items_count || 0} ingredienti - ${recipe.prep_time_minutes ? `${recipe.prep_time_minutes} min - ` : ""}${money(recipe.estimated_total)}</p>
       </div>
       <button type="button" data-select-recipe="${recipe.id}">Scegli</button>
     </article>
@@ -307,6 +318,7 @@ async function selectRecipe(recipeId) {
         day_index: activeSlot.dayIndex,
         meal_type: activeSlot.mealType,
         recipe_id: recipeId,
+        notes: $("menuRecipeNote")?.value?.trim() || null,
       }),
     });
     renderStats();
@@ -436,7 +448,7 @@ async function drawPlannerOverviewPage(doc) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.text(
-    `${fullDate(currentWeekStart)} → ${fullDate(addDays(currentWeekStart, 6))}`,
+    `${fullDate(currentWeekStart)} -> ${fullDate(addDays(currentWeekStart, 6))}`,
     margin + 7,
     27
   );
@@ -470,21 +482,21 @@ async function drawPlannerOverviewPage(doc) {
     for (let mi = 0; mi < MEALS.length; mi++) {
       const meal = MEALS[mi];
       const y = startY + 12 + mi * slotH;
-      const item = getItem(day.index, meal.id);
-      await drawMiniSlot(doc, x + 2.5, y, colW - 5, slotH - 3.5, meal, item);
+      const items = getItems(day.index, meal.id);
+      await drawMiniSlot(doc, x + 2.5, y, colW - 5, slotH - 3.5, meal, items);
     }
   }
 
   doc.setTextColor(...PDF_MUTED);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
-  doc.text("Pagina 1 · panoramica completa della settimana", pageW / 2, pageH - 5, { align: "center" });
+  doc.text("Pagina 1 - panoramica completa della settimana", pageW / 2, pageH - 5, { align: "center" });
 }
 
 function countDaysWithMeals() {
   let count = 0;
   for (const day of DAYS) {
-    if (getDayItems(day.index).some(({ item }) => !!item?.recipe)) count += 1;
+    if (getDayItems(day.index, false).length > 0) count += 1;
   }
   return count;
 }
@@ -500,7 +512,7 @@ function drawSummaryPill(doc, x, y, w, h, text) {
   doc.text(text, x + w / 2, y + 4.9, { align: "center" });
 }
 
-async function drawMiniSlot(doc, x, y, w, h, meal, item) {
+async function drawMiniSlot(doc, x, y, w, h, meal, items) {
   doc.setDrawColor(...PDF_LINE);
   doc.setFillColor(...PDF_BG);
   doc.roundedRect(x, y, w, h, 3, 3, "FD");
@@ -510,7 +522,7 @@ async function drawMiniSlot(doc, x, y, w, h, meal, item) {
   doc.setFontSize(6.3);
   doc.text(`${meal.label}`, x + 2, y + 4.8);
 
-  if (!item?.recipe) {
+  if (!items?.length) {
     doc.setTextColor(148, 163, 184);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
@@ -518,7 +530,7 @@ async function drawMiniSlot(doc, x, y, w, h, meal, item) {
     return;
   }
 
-  const recipe = item.recipe;
+  const recipe = items[0].recipe;
   const image = await loadPdfImage(recipe.image);
   const imgX = x + 2;
   const imgY = y + 7;
@@ -550,7 +562,7 @@ async function drawMiniSlot(doc, x, y, w, h, meal, item) {
 
   doc.setTextColor(...PDF_GREEN_DARK);
   doc.setFont("helvetica", "bold");
-  doc.text(money(recipe.estimated_total), x + w - 4, y + h - 3.4, { align: "right" });
+  doc.text(items.length > 1 ? `${items.length} ric.` : money(recipe.estimated_total), x + w - 4, y + h - 3.4, { align: "right" });
 }
 
 async function drawDayPage(doc, day) {
@@ -562,9 +574,9 @@ async function drawDayPage(doc, day) {
   const cardH = 109;
   const startY = 52;
   const pageDate = addDays(currentWeekStart, day.index);
-  const entries = getDayItems(day.index);
-  const filledCount = entries.filter(({ item }) => !!item?.recipe).length;
-  const dayTotal = entries.reduce((sum, { item }) => sum + Number(item?.recipe?.estimated_total || 0), 0);
+  const entries = getDayItems(day.index, false);
+  const filledCount = entries.reduce((sum, { items }) => sum + items.length, 0);
+  const dayTotal = entries.reduce((sum, { items }) => sum + items.reduce((s, item) => s + Number(item?.recipe?.estimated_total || 0), 0), 0);
 
   doc.setFillColor(247, 252, 249);
   doc.rect(0, 0, pageW, pageH, "F");
@@ -589,18 +601,35 @@ async function drawDayPage(doc, day) {
   drawHeaderMiniPill(doc, pageW - 69, 15, 25, 7, `${filledCount} ric.`);
   drawHeaderMiniPill(doc, pageW - 41, 15, 24, 7, money(dayTotal));
 
+  if (!entries.length) {
+    drawEmptyDayMessage(doc, pageW, pageH);
+  }
+
   for (let i = 0; i < entries.length; i++) {
     const row = Math.floor(i / 2);
     const col = i % 2;
     const x = margin + col * (cardW + gap);
     const y = startY + row * (cardH + 8);
-    await drawDayRecipeCard(doc, x, y, cardW, cardH, entries[i].meal, entries[i].item);
+    await drawDayRecipeCard(doc, x, y, cardW, cardH, entries[i].meal, entries[i].items);
   }
 
   doc.setTextColor(...PDF_MUTED);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
-  doc.text(`Pagina giorno · ${day.label}`, pageW / 2, pageH - 6, { align: "center" });
+  doc.text(`Pagina giorno - ${day.label}`, pageW / 2, pageH - 6, { align: "center" });
+}
+
+function drawEmptyDayMessage(doc, pageW, pageH) {
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...PDF_LINE);
+  doc.roundedRect(24, 86, pageW - 48, 74, 8, 8, "FD");
+  doc.setTextColor(...PDF_MUTED);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.text("Nessuna ricetta pianificata", pageW / 2, 116, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text("Questo giorno resta libero nel menu settimanale.", pageW / 2, 128, { align: "center" });
 }
 
 function drawHeaderMiniPill(doc, x, y, w, h, text) {
@@ -614,7 +643,7 @@ function drawHeaderMiniPill(doc, x, y, w, h, text) {
   doc.text(text, x + w / 2, y + 4.8, { align: "center" });
 }
 
-async function drawDayRecipeCard(doc, x, y, w, h, meal, item) {
+async function drawDayRecipeCard(doc, x, y, w, h, meal, items) {
   doc.setFillColor(255, 255, 255);
   doc.setDrawColor(...PDF_LINE);
   doc.roundedRect(x, y, w, h, 6, 6, "FD");
@@ -631,18 +660,11 @@ async function drawDayRecipeCard(doc, x, y, w, h, meal, item) {
   doc.setFillColor(241, 245, 249);
   doc.roundedRect(x + 4, imageY, w - 8, imageH, 5, 5, "F");
 
-  if (!item?.recipe) {
-    doc.setTextColor(148, 163, 184);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text("Nessuna ricetta", x + w / 2, imageY + 22, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.text("Puoi usare questo spazio come giorno libero o pasto fuori casa.", x + w / 2, imageY + 30, { align: "center" });
+  if (!items?.length) {
     return;
   }
 
-  const recipe = item.recipe;
+  const recipe = items[0].recipe;
   const image = await loadPdfImage(recipe.image);
   if (image?.data) {
     try {
@@ -665,18 +687,33 @@ async function drawDayRecipeCard(doc, x, y, w, h, meal, item) {
   const meta = [];
   if (recipe.prep_time_minutes) meta.push(`${recipe.prep_time_minutes} min`);
   meta.push(`${recipe.servings || 1} porz.`);
-  meta.push(`${recipe.items_count || 0} ingredienti`);
-  meta.push(money(recipe.estimated_total));
+  meta.push(`${items.length} ricetta${items.length > 1 ? "e" : ""}`);
+  meta.push(money(items.reduce((sum, item) => sum + Number(item?.recipe?.estimated_total || 0), 0)));
 
   drawInlineTags(doc, textX, cursorY, meta, w - 10);
   cursorY += 11;
 
-  const desc = recipe.description || recipe.instructions || "Ricetta selezionata per questo momento della giornata.";
-  doc.setTextColor(...PDF_MUTED);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.2);
-  const descLines = doc.splitTextToSize(cleanSnippet(desc), w - 10).slice(0, 5);
-  doc.text(descLines, textX, cursorY);
+  const menuNotes = items
+    .map(item => item.notes ? `${item.recipe?.name || "Ricetta"}: ${item.notes}` : "")
+    .filter(Boolean);
+
+  if (menuNotes.length) {
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(textX - 1, cursorY - 4, w - 8, 18, 3, 3, "F");
+    doc.setTextColor(...PDF_MUTED);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.6);
+    const noteLines = doc.splitTextToSize(menuNotes.join("  |  "), w - 12).slice(0, 3);
+    doc.text(noteLines, textX + 1, cursorY + 1);
+  }
+
+  if (items.length > 1) {
+    const extraNames = items.slice(1).map(item => `+ ${item.recipe?.name || "Ricetta"}`).join("  ");
+    doc.setTextColor(...PDF_GREEN_DARK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.text(doc.splitTextToSize(extraNames, w - 10).slice(0, 2), textX, y + h - 8);
+  }
 }
 
 function drawInlineTags(doc, startX, y, tags, maxWidth) {
@@ -698,6 +735,7 @@ function drawInlineTags(doc, startX, y, tags, maxWidth) {
 
 async function drawRecipeDetailsSection(doc, items) {
   const uniqueRecipes = dedupeRecipes(items.map(i => i.recipe).filter(Boolean));
+  const notesByRecipeId = buildNotesByRecipeId(items);
   let pageIndex = 0;
   let y = 36;
   const pageW = 210;
@@ -714,7 +752,7 @@ async function drawRecipeDetailsSection(doc, items) {
       renderRecipeSectionHeader(doc, pageIndex + 1);
       y = 36;
     }
-    await drawRecipeDetailCard(doc, 12, y, pageW - 24, cardH, recipe);
+    await drawRecipeDetailCard(doc, 12, y, pageW - 24, cardH, recipe, notesByRecipeId.get(recipe.id) || []);
     y += cardH + gap;
   }
 }
@@ -732,7 +770,7 @@ function renderRecipeSectionHeader(doc, pageNumber) {
   doc.text("Ingredienti ricetta per ricetta", 18, 22);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.8);
-  doc.text(`Sezione finale · pagina ${pageNumber}`, pageW - 18, 22, { align: "right" });
+  doc.text(`Sezione finale - pagina ${pageNumber}`, pageW - 18, 22, { align: "right" });
 }
 
 function dedupeRecipes(list) {
@@ -746,7 +784,17 @@ function dedupeRecipes(list) {
   return out;
 }
 
-async function drawRecipeDetailCard(doc, x, y, w, h, recipe) {
+function buildNotesByRecipeId(items) {
+  const map = new Map();
+  for (const item of items) {
+    if (!item?.recipe?.id || !item.notes) continue;
+    if (!map.has(item.recipe.id)) map.set(item.recipe.id, []);
+    map.get(item.recipe.id).push(item.notes);
+  }
+  return map;
+}
+
+async function drawRecipeDetailCard(doc, x, y, w, h, recipe, menuNotes = []) {
   doc.setFillColor(255, 255, 255);
   doc.setDrawColor(...PDF_LINE);
   doc.roundedRect(x, y, w, h, 6, 6, "FD");
@@ -776,44 +824,41 @@ async function drawRecipeDetailCard(doc, x, y, w, h, recipe) {
   doc.setTextColor(...PDF_MUTED);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  const metaLine = `${recipe.items_count || 0} ingredienti · ${recipe.servings || 1} porzioni · ${recipe.prep_time_minutes ? `${recipe.prep_time_minutes} min · ` : ""}${money(recipe.estimated_total)}`;
+  const metaLine = `${recipe.items_count || 0} ingredienti - ${recipe.servings || 1} porzioni - ${recipe.prep_time_minutes ? `${recipe.prep_time_minutes} min - ` : ""}${money(recipe.estimated_total)}`;
   doc.text(metaLine, textX, y + 22);
 
   const ingredientLines = buildIngredientLines(recipe.items || []);
   doc.setTextColor(...PDF_SLATE);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.1);
-  doc.text(doc.splitTextToSize(ingredientLines.join("
-"), w - 62).slice(0, 7), textX, y + 31);
+  doc.text(doc.splitTextToSize(ingredientLines.join("\\n"), w - 62).slice(0, 7), textX, y + 31);
 
-  const note = recipe.description || recipe.instructions;
-  if (note) {
+  if (menuNotes.length) {
     doc.setFillColor(248, 250, 252);
     doc.roundedRect(x + 5, y + 56, w - 10, 16, 3, 3, "F");
     doc.setTextColor(...PDF_MUTED);
     doc.setFont("helvetica", "italic");
     doc.setFontSize(7.4);
-    doc.text(doc.splitTextToSize(cleanSnippet(note), w - 16).slice(0, 2), x + 8, y + 63);
+    doc.text(doc.splitTextToSize(cleanSnippet(menuNotes.join(" | ")), w - 16).slice(0, 2), x + 8, y + 63);
   }
 }
 
 function buildIngredientLines(items) {
-  if (!items.length) return ["• Nessun ingrediente salvato"];
+  if (!items.length) return ["- Nessun ingrediente salvato"];
   const lines = items.slice(0, 8).map(i => {
     const productName = i.product?.name || i.ingredient_name || "Ingrediente";
     const qty = i.cart_quantity || i.quantity || 1;
     const unit = i.unit || "";
-    return `• ${productName} × ${qty}${unit ? ` ${unit}` : ""}`;
+    return `- ${productName} x ${qty}${unit ? ` ${unit}` : ""}`;
   });
-  if (items.length > 8) lines.push(`• + altri ${items.length - 8} ingredienti`);
+  if (items.length > 8) lines.push(`- + altri ${items.length - 8} ingredienti`);
   return lines;
 }
 
 function cleanSnippet(text) {
   return String(text || "")
     .replace(/\s+/g, " ")
-    .replace(/
-+/g, " ")
+    .replace(/\\n+/g, " ")
     .trim();
 }
 

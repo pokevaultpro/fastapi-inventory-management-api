@@ -118,3 +118,33 @@ Migliorie:
 - In ogni pagina giornaliera: card grandi per colazione, pranzo, spuntino, cena
 - Ultima sezione: ingredienti ricetta per ricetta con immagini grandi
 - Mantiene il fix immagini PDF del v27c
+
+## v27e ASCII PDF fix
+
+Fix di sicurezza per `Uncaught SyntaxError: Invalid or unexpected token`:
+- `weekly-menu.js` riscritto/salvato in UTF-8 ASCII-safe
+- rimossi emoji/caratteri speciali dal sorgente JS
+- PDF giornaliero v27d mantenuto
+- console marker: `weekly-menu v27e ascii pdf fix loaded`
+
+## v27f syntax fix
+
+Corretto errore JS:
+- stringa `ingredientLines.join("\n")` non spezzata su due righe
+- regex `replace(/\n+/g, " ")` non spezzata su due righe
+- console marker: `weekly-menu v27f syntax fix loaded`
+
+## v27g multi-ricetta per pasto
+
+- Ogni slot pranzo/cena/colazione/spuntino ora può contenere più ricette.
+- Il vecchio indice unico `ux_weekly_menu_items_slot` viene rimosso automaticamente.
+- Nel planner gli slot vuoti sono compatti.
+- Nel PDF giornaliero vengono mostrati solo i pasti compilati.
+- Se un pasto ha più ricette, il PDF mostra la principale con indicazione delle altre.
+
+## v27h note menu-specifiche nel PDF
+
+- Nel modal di scelta ricetta c'e un campo "Nota per questo menu".
+- La nota viene salvata nello slot del menu, non nella ricetta.
+- Nel planner la nota appare sotto la ricetta aggiunta.
+- Nel PDF giornaliero e nella sezione finale si usano le note del menu al posto della descrizione della ricetta.

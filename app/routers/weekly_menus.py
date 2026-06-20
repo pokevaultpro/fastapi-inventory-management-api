@@ -104,12 +104,18 @@ def ensure_schema_ready() -> None:
                     recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
                     servings_override INTEGER,
                     notes TEXT,
+                    position INTEGER DEFAULT 0,
                     created_at VARCHAR(40),
                     updated_at VARCHAR(40)
                 )
             """))
+            conn.execute(text("DROP INDEX IF EXISTS ux_weekly_menu_items_slot"))
             conn.execute(text("""
-                CREATE UNIQUE INDEX IF NOT EXISTS ux_weekly_menu_items_slot
+                ALTER TABLE weekly_menu_items
+                ADD COLUMN IF NOT EXISTS position INTEGER DEFAULT 0
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS ix_weekly_menu_items_slot
                 ON weekly_menu_items(weekly_menu_id, day_index, meal_type)
             """))
         else:
@@ -136,12 +142,18 @@ def ensure_schema_ready() -> None:
                     recipe_id INTEGER NOT NULL,
                     servings_override INTEGER,
                     notes TEXT,
+                    position INTEGER DEFAULT 0,
                     created_at VARCHAR(40),
                     updated_at VARCHAR(40)
                 )
             """))
+            conn.execute(text("DROP INDEX IF EXISTS ux_weekly_menu_items_slot"))
+            try:
+                conn.execute(text("ALTER TABLE weekly_menu_items ADD COLUMN position INTEGER DEFAULT 0"))
+            except Exception:
+                pass
             conn.execute(text("""
-                CREATE UNIQUE INDEX IF NOT EXISTS ux_weekly_menu_items_slot
+                CREATE INDEX IF NOT EXISTS ix_weekly_menu_items_slot
                 ON weekly_menu_items(weekly_menu_id, day_index, meal_type)
             """))
 
@@ -284,7 +296,7 @@ def serialize_recipe(db: Session, recipe: Recipes | None) -> dict | None:
 def _serialize_menu(db: Session, menu: dict) -> dict:
     rows = db.execute(
         text("""
-            SELECT id, weekly_menu_id, day_index, meal_type, recipe_id, servings_override, notes, created_at, updated_at
+            SELECT id, weekly_menu_id, day_index, meal_type, recipe_id, servings_override, notes, COALESCE(position, 0) AS position, created_at, updated_at
             FROM weekly_menu_items
             WHERE weekly_menu_id = :menu_id
             ORDER BY day_index ASC,
@@ -294,7 +306,9 @@ def _serialize_menu(db: Session, menu: dict) -> dict:
                     WHEN 'snack' THEN 3
                     WHEN 'dinner' THEN 4
                     ELSE 9
-                END
+                END,
+                COALESCE(position, 0) ASC,
+                id ASC
         """),
         {"menu_id": menu["id"]},
     ).fetchall()
@@ -368,7 +382,7 @@ def list_available_recipes(user: user_dependency, db: db_dependency):
 
 
 @router.post("/item", status_code=status.HTTP_200_OK)
-def upsert_weekly_menu_item(user: user_dependency, db: db_dependency, request: WeeklyMenuItemUpsert):
+def add_weekly_menu_item(user: user_dependency, db: db_dependency, request: WeeklyMenuItemUpsert):
     owner_id = user.get("id")
     menu = ensure_menu(db, owner_id, _week_start(request.week_start))
 
@@ -376,42 +390,46 @@ def upsert_weekly_menu_item(user: user_dependency, db: db_dependency, request: W
     if not recipe:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ricetta non trovata")
 
-    existing = db.execute(
-        text("SELECT id FROM weekly_menu_items WHERE weekly_menu_id = :menu_id AND day_index = :day_index AND meal_type = :meal_type"),
-        {"menu_id": menu["id"], "day_index": request.day_index, "meal_type": request.meal_type},
-    ).first()
+    next_position = db.execute(
+        text("""
+            SELECT COALESCE(MAX(position), 0) + 1
+            FROM weekly_menu_items
+            WHERE weekly_menu_id = :menu_id
+              AND day_index = :day_index
+              AND meal_type = :meal_type
+        """),
+        {
+            "menu_id": menu["id"],
+            "day_index": request.day_index,
+            "meal_type": request.meal_type,
+        },
+    ).scalar_one()
 
     now = _now_iso()
-    if existing:
-        db.execute(
-            text("""
-                UPDATE weekly_menu_items
-                SET recipe_id = :recipe_id, servings_override = :servings_override, notes = :notes, updated_at = :updated_at
-                WHERE id = :id
-            """),
-            {"id": existing[0], "recipe_id": request.recipe_id, "servings_override": request.servings_override, "notes": request.notes, "updated_at": now},
-        )
-    else:
-        db.execute(
-            text("""
-                INSERT INTO weekly_menu_items
-                    (weekly_menu_id, day_index, meal_type, recipe_id, servings_override, notes, created_at, updated_at)
-                VALUES
-                    (:weekly_menu_id, :day_index, :meal_type, :recipe_id, :servings_override, :notes, :created_at, :updated_at)
-            """),
-            {
-                "weekly_menu_id": menu["id"],
-                "day_index": request.day_index,
-                "meal_type": request.meal_type,
-                "recipe_id": request.recipe_id,
-                "servings_override": request.servings_override,
-                "notes": request.notes,
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
+    db.execute(
+        text("""
+            INSERT INTO weekly_menu_items
+                (weekly_menu_id, day_index, meal_type, recipe_id, servings_override, notes, position, created_at, updated_at)
+            VALUES
+                (:weekly_menu_id, :day_index, :meal_type, :recipe_id, :servings_override, :notes, :position, :created_at, :updated_at)
+        """),
+        {
+            "weekly_menu_id": menu["id"],
+            "day_index": request.day_index,
+            "meal_type": request.meal_type,
+            "recipe_id": request.recipe_id,
+            "servings_override": request.servings_override,
+            "notes": request.notes,
+            "position": next_position,
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
 
-    db.execute(text("UPDATE weekly_menus SET updated_at = :updated_at WHERE id = :id"), {"updated_at": now, "id": menu["id"]})
+    db.execute(
+        text("UPDATE weekly_menus SET updated_at = :updated_at WHERE id = :id"),
+        {"updated_at": now, "id": menu["id"]},
+    )
     db.commit()
     menu = ensure_menu(db, owner_id, _week_start(request.week_start))
     return _serialize_menu(db, menu)
@@ -477,9 +495,9 @@ def duplicate_menu_next_week(user: user_dependency, db: db_dependency, menu_id: 
         db.execute(
             text("""
                 INSERT INTO weekly_menu_items
-                    (weekly_menu_id, day_index, meal_type, recipe_id, servings_override, notes, created_at, updated_at)
+                    (weekly_menu_id, day_index, meal_type, recipe_id, servings_override, notes, position, created_at, updated_at)
                 VALUES
-                    (:weekly_menu_id, :day_index, :meal_type, :recipe_id, :servings_override, :notes, :created_at, :updated_at)
+                    (:weekly_menu_id, :day_index, :meal_type, :recipe_id, :servings_override, :notes, :position, :created_at, :updated_at)
             """),
             {
                 "weekly_menu_id": next_menu["id"],
@@ -488,6 +506,7 @@ def duplicate_menu_next_week(user: user_dependency, db: db_dependency, menu_id: 
                 "recipe_id": data["recipe_id"],
                 "servings_override": data["servings_override"],
                 "notes": data["notes"],
+                "position": data.get("position") or 0,
                 "created_at": now,
                 "updated_at": now,
             },
