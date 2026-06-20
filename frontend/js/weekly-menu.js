@@ -1,5 +1,5 @@
 import CONFIG from "./config.js";
-console.log("weekly-menu v27h menu notes loaded");
+console.log("weekly-menu v27i notes and multi pdf loaded");
 
 const DAYS = [
   { index: 0, label: "Lunedi", short: "Lun" },
@@ -288,11 +288,12 @@ function renderRecipePicker() {
   }
 
   container.innerHTML = filtered.map(recipe => `
-    <article class="recipe-picker-card">
+    <article class="recipe-picker-card recipe-picker-card-with-note" data-recipe-card="${recipe.id}">
       <img src="${escapeAttr(imageOrPlaceholder(recipe.image))}" alt="${escapeAttr(recipe.name)}" />
       <div>
         <h3>${escapeHTML(recipe.name)}</h3>
         <p>${recipe.items_count || 0} ingredienti - ${recipe.prep_time_minutes ? `${recipe.prep_time_minutes} min - ` : ""}${money(recipe.estimated_total)}</p>
+        <textarea class="recipe-note-inline" data-recipe-note="${recipe.id}" rows="2" maxlength="500" placeholder="Nota per questo menu: es. senza aglio, doppia porzione, prepara prima..."></textarea>
       </div>
       <button type="button" data-select-recipe="${recipe.id}">Scegli</button>
     </article>
@@ -304,11 +305,17 @@ function renderRecipePicker() {
     });
   });
   container.querySelectorAll("[data-select-recipe]").forEach(btn => {
-    btn.addEventListener("click", () => selectRecipe(Number(btn.dataset.selectRecipe)));
+    btn.addEventListener("click", () => {
+      const recipeId = Number(btn.dataset.selectRecipe);
+      const card = btn.closest("[data-recipe-card]");
+      const inlineNote = card?.querySelector(`[data-recipe-note="${recipeId}"]`)?.value?.trim() || "";
+      const topNote = $("menuRecipeNote")?.value?.trim() || "";
+      selectRecipe(recipeId, inlineNote || topNote || null);
+    });
   });
 }
 
-async function selectRecipe(recipeId) {
+async function selectRecipe(recipeId, noteOverride = null) {
   if (!activeSlot) return;
   try {
     currentMenu = await api("/weekly-menus/item", {
@@ -318,7 +325,7 @@ async function selectRecipe(recipeId) {
         day_index: activeSlot.dayIndex,
         meal_type: activeSlot.mealType,
         recipe_id: recipeId,
-        notes: $("menuRecipeNote")?.value?.trim() || null,
+        notes: noteOverride || null,
       }),
     });
     renderStats();
@@ -479,11 +486,19 @@ async function drawPlannerOverviewPage(doc) {
     doc.setFontSize(7);
     doc.text(formatDate(dayDate), x + colW - 5, startY + 3.8, { align: "right" });
 
-    for (let mi = 0; mi < MEALS.length; mi++) {
-      const meal = MEALS[mi];
-      const y = startY + 12 + mi * slotH;
-      const items = getItems(day.index, meal.id);
-      await drawMiniSlot(doc, x + 2.5, y, colW - 5, slotH - 3.5, meal, items);
+    const nonEmptyEntries = getDayItems(day.index, false);
+    if (!nonEmptyEntries.length) {
+      doc.setTextColor(148, 163, 184);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.text("libero", x + colW / 2, startY + 29, { align: "center" });
+    }
+
+    let yCursor = startY + 12;
+    for (const entry of nonEmptyEntries) {
+      const h = Math.min(38, 14 + entry.items.length * 7);
+      await drawMiniSlot(doc, x + 2.5, yCursor, colW - 5, h, entry.meal, entry.items);
+      yCursor += h + 4;
     }
   }
 
@@ -513,6 +528,8 @@ function drawSummaryPill(doc, x, y, w, h, text) {
 }
 
 async function drawMiniSlot(doc, x, y, w, h, meal, items) {
+  if (!items?.length) return;
+
   doc.setDrawColor(...PDF_LINE);
   doc.setFillColor(...PDF_BG);
   doc.roundedRect(x, y, w, h, 3, 3, "FD");
@@ -522,47 +539,25 @@ async function drawMiniSlot(doc, x, y, w, h, meal, items) {
   doc.setFontSize(6.3);
   doc.text(`${meal.label}`, x + 2, y + 4.8);
 
-  if (!items?.length) {
-    doc.setTextColor(148, 163, 184);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.text("vuoto", x + w / 2, y + h / 2 + 2, { align: "center" });
-    return;
-  }
-
-  const recipe = items[0].recipe;
-  const image = await loadPdfImage(recipe.image);
-  const imgX = x + 2;
-  const imgY = y + 7;
-  const imgSize = 11.5;
-
-  doc.setFillColor(...PDF_GREEN_SOFT);
-  doc.roundedRect(imgX, imgY, imgSize, imgSize, 2.2, 2.2, "F");
-  if (image?.data) {
-    try {
-      doc.addImage(image.data, image.format, imgX, imgY, imgSize, imgSize, undefined, "FAST");
-    } catch (err) {
-      console.warn("PDF image skipped", recipe.image, err);
-    }
-  }
-
+  const names = items.map(item => item.recipe?.name || "Ricetta");
   doc.setTextColor(...PDF_SLATE);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.45);
-  const titleLines = doc.splitTextToSize(recipe.name || "", w - 17);
-  doc.text(titleLines.slice(0, 3), x + 15.2, y + 9.5);
+  doc.setFontSize(5.9);
 
-  doc.setFillColor(255, 255, 255);
-  doc.roundedRect(x + 2, y + h - 7, w - 4, 5, 2, 2, "F");
+  let lineY = y + 10.8;
+  for (const name of names.slice(0, 4)) {
+    const lines = doc.splitTextToSize(`- ${name}`, w - 4).slice(0, 1);
+    doc.text(lines, x + 2, lineY);
+    lineY += 6.2;
+    if (lineY > y + h - 4) break;
+  }
 
-  doc.setTextColor(...PDF_MUTED);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(5.8);
-  doc.text(`${recipe.servings || 1} porz.`, x + 4, y + h - 3.4);
-
-  doc.setTextColor(...PDF_GREEN_DARK);
-  doc.setFont("helvetica", "bold");
-  doc.text(items.length > 1 ? `${items.length} ric.` : money(recipe.estimated_total), x + w - 4, y + h - 3.4, { align: "right" });
+  if (names.length > 4) {
+    doc.setTextColor(...PDF_GREEN_DARK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(5.8);
+    doc.text(`+ altre ${names.length - 4}`, x + w - 2, y + h - 3, { align: "right" });
+  }
 }
 
 async function drawDayPage(doc, day) {
@@ -575,9 +570,37 @@ async function drawDayPage(doc, day) {
   const startY = 52;
   const pageDate = addDays(currentWeekStart, day.index);
   const entries = getDayItems(day.index, false);
-  const filledCount = entries.reduce((sum, { items }) => sum + items.length, 0);
-  const dayTotal = entries.reduce((sum, { items }) => sum + items.reduce((s, item) => s + Number(item?.recipe?.estimated_total || 0), 0), 0);
+  const cards = entries.flatMap(entry => entry.items.map(item => ({ meal: entry.meal, item })));
+  const filledCount = cards.length;
+  const dayTotal = cards.reduce((sum, card) => sum + Number(card.item?.recipe?.estimated_total || 0), 0);
 
+  if (!cards.length) {
+    drawDayHeader(doc, day, pageDate, filledCount, dayTotal, false);
+    drawEmptyDayMessage(doc, pageW, pageH);
+    drawDayFooter(doc, pageW, pageH, day, 1, 1);
+    return;
+  }
+
+  const chunks = chunkArray(cards, 4);
+  for (let pageIndex = 0; pageIndex < chunks.length; pageIndex++) {
+    if (pageIndex > 0) doc.addPage("a4", "portrait");
+    drawDayHeader(doc, day, pageDate, filledCount, dayTotal, pageIndex > 0);
+
+    for (let i = 0; i < chunks[pageIndex].length; i++) {
+      const row = Math.floor(i / 2);
+      const col = i % 2;
+      const x = margin + col * (cardW + gap);
+      const y = startY + row * (cardH + 8);
+      await drawDayRecipeCard(doc, x, y, cardW, cardH, chunks[pageIndex][i].meal, chunks[pageIndex][i].item);
+    }
+
+    drawDayFooter(doc, pageW, pageH, day, pageIndex + 1, chunks.length);
+  }
+}
+
+function drawDayHeader(doc, day, pageDate, filledCount, dayTotal, continuation = false) {
+  const pageW = 210;
+  const pageH = 297;
   doc.setFillColor(247, 252, 249);
   doc.rect(0, 0, pageW, pageH, "F");
 
@@ -593,30 +616,27 @@ async function drawDayPage(doc, day) {
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
-  doc.text(day.label, 18, 21);
+  doc.text(continuation ? `${day.label} - continua` : day.label, 18, 21);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.text(fullDate(pageDate), 18, 28);
 
-  drawHeaderMiniPill(doc, pageW - 69, 15, 25, 7, `${filledCount} ric.`);
+  drawHeaderMiniPill(doc, pageW - 73, 15, 29, 7, `${filledCount} ricette`);
   drawHeaderMiniPill(doc, pageW - 41, 15, 24, 7, money(dayTotal));
+}
 
-  if (!entries.length) {
-    drawEmptyDayMessage(doc, pageW, pageH);
-  }
-
-  for (let i = 0; i < entries.length; i++) {
-    const row = Math.floor(i / 2);
-    const col = i % 2;
-    const x = margin + col * (cardW + gap);
-    const y = startY + row * (cardH + 8);
-    await drawDayRecipeCard(doc, x, y, cardW, cardH, entries[i].meal, entries[i].items);
-  }
-
+function drawDayFooter(doc, pageW, pageH, day, pageIndex, pageCount) {
   doc.setTextColor(...PDF_MUTED);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
-  doc.text(`Pagina giorno - ${day.label}`, pageW / 2, pageH - 6, { align: "center" });
+  const suffix = pageCount > 1 ? ` ${pageIndex}/${pageCount}` : "";
+  doc.text(`Pagina giorno - ${day.label}${suffix}`, pageW / 2, pageH - 6, { align: "center" });
+}
+
+function chunkArray(list, size) {
+  const chunks = [];
+  for (let i = 0; i < list.length; i += size) chunks.push(list.slice(i, i + size));
+  return chunks;
 }
 
 function drawEmptyDayMessage(doc, pageW, pageH) {
@@ -643,28 +663,26 @@ function drawHeaderMiniPill(doc, x, y, w, h, text) {
   doc.text(text, x + w / 2, y + 4.8, { align: "center" });
 }
 
-async function drawDayRecipeCard(doc, x, y, w, h, meal, items) {
+async function drawDayRecipeCard(doc, x, y, w, h, meal, item) {
   doc.setFillColor(255, 255, 255);
   doc.setDrawColor(...PDF_LINE);
   doc.roundedRect(x, y, w, h, 6, 6, "FD");
 
   doc.setFillColor(...PDF_GREEN_SOFT);
-  doc.roundedRect(x + 4, y + 4, 34, 8, 3, 3, "F");
+  doc.roundedRect(x + 4, y + 4, 38, 8, 3, 3, "F");
   doc.setTextColor(...PDF_GREEN_DARK);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.3);
-  doc.text(`${meal.emoji} ${meal.label}`, x + 8, y + 9.2);
+  doc.text(meal.label, x + 8, y + 9.2);
 
   const imageY = y + 16;
   const imageH = 48;
   doc.setFillColor(241, 245, 249);
   doc.roundedRect(x + 4, imageY, w - 8, imageH, 5, 5, "F");
 
-  if (!items?.length) {
-    return;
-  }
+  if (!item?.recipe) return;
 
-  const recipe = items[0].recipe;
+  const recipe = item.recipe;
   const image = await loadPdfImage(recipe.image);
   if (image?.data) {
     try {
@@ -687,32 +705,19 @@ async function drawDayRecipeCard(doc, x, y, w, h, meal, items) {
   const meta = [];
   if (recipe.prep_time_minutes) meta.push(`${recipe.prep_time_minutes} min`);
   meta.push(`${recipe.servings || 1} porz.`);
-  meta.push(`${items.length} ricetta${items.length > 1 ? "e" : ""}`);
-  meta.push(money(items.reduce((sum, item) => sum + Number(item?.recipe?.estimated_total || 0), 0)));
-
+  meta.push(`${recipe.items_count || 0} ingredienti`);
+  meta.push(money(recipe.estimated_total));
   drawInlineTags(doc, textX, cursorY, meta, w - 10);
   cursorY += 11;
 
-  const menuNotes = items
-    .map(item => item.notes ? `${item.recipe?.name || "Ricetta"}: ${item.notes}` : "")
-    .filter(Boolean);
-
-  if (menuNotes.length) {
+  if (item.notes) {
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(textX - 1, cursorY - 4, w - 8, 18, 3, 3, "F");
+    doc.roundedRect(textX - 1, cursorY - 4, w - 8, 21, 3, 3, "F");
     doc.setTextColor(...PDF_MUTED);
     doc.setFont("helvetica", "italic");
-    doc.setFontSize(7.6);
-    const noteLines = doc.splitTextToSize(menuNotes.join("  |  "), w - 12).slice(0, 3);
+    doc.setFontSize(7.8);
+    const noteLines = doc.splitTextToSize(cleanSnippet(item.notes), w - 12).slice(0, 3);
     doc.text(noteLines, textX + 1, cursorY + 1);
-  }
-
-  if (items.length > 1) {
-    const extraNames = items.slice(1).map(item => `+ ${item.recipe?.name || "Ricetta"}`).join("  ");
-    doc.setTextColor(...PDF_GREEN_DARK);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.5);
-    doc.text(doc.splitTextToSize(extraNames, w - 10).slice(0, 2), textX, y + h - 8);
   }
 }
 

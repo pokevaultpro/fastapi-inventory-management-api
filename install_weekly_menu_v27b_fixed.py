@@ -101,7 +101,7 @@ def main() -> None:
     patch_navbar(root)
 
     print()
-    print("Patch v27b installata.")
+    print("Patch v27i installata.")
     print("Ora fai commit/push/redeploy Render.")
     print("Su SiteGround carica:")
     print("- frontend/weekly-menu.html")

@@ -111,8 +111,8 @@ def main() -> None:
     patch_navbar(root)
 
     print()
-    print("Patch v27h installata.")
-    print("Note menu-specifiche nel PDF.")
+    print("Patch v27i installata.")
+    print("Note visibili nel modal e PDF multi-ricetta completo.")
     print("Poi fai commit/push/redeploy Render.")
     print("Su SiteGround carica:")
     print("- frontend/weekly-menu.html")

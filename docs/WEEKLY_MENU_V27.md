@@ -148,3 +148,11 @@ Corretto errore JS:
 - La nota viene salvata nello slot del menu, non nella ricetta.
 - Nel planner la nota appare sotto la ricetta aggiunta.
 - Nel PDF giornaliero e nella sezione finale si usano le note del menu al posto della descrizione della ricetta.
+
+
+## v27i note visibili + PDF multi-ricetta completo
+
+- La nota ora compare direttamente sotto ogni ricetta nel modal di selezione.
+- Puoi scrivere una nota diversa prima di premere "Scegli" su quella ricetta.
+- Nel PDF giornaliero ogni ricetta dello stesso pasto viene mostrata come card grande separata, non come piccolo "+ nome".
+- Nella prima pagina overview i pasti con più ricette mostrano i nomi delle ricette, non solo il conteggio.
