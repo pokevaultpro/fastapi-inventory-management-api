@@ -23,6 +23,61 @@ MEAL_TYPES = [
     {"id": "dinner", "label": "Cena", "emoji": "🍽️"},
 ]
 
+
+NUTRITION_FIELDS = [
+    "calories_kcal",
+    "protein_g",
+    "fat_total_g",
+    "saturated_fat_g",
+    "monounsaturated_fat_g",
+    "polyunsaturated_fat_g",
+    "carbohydrates_g",
+    "sugars_g",
+    "fiber_g",
+    "sodium_mg",
+    "calcium_mg",
+    "iron_mg",
+    "vitamin_d_mcg",
+    "vitamin_c_mg",
+]
+
+
+def _empty_nutrition() -> dict:
+    return {key: 0.0 for key in NUTRITION_FIELDS}
+
+
+def _nutrition_for_recipe(db: Session, recipe_id: int) -> dict | None:
+    try:
+        row = db.execute(
+            text("""
+                SELECT calories_kcal, protein_g, fat_total_g, saturated_fat_g,
+                       monounsaturated_fat_g, polyunsaturated_fat_g, carbohydrates_g,
+                       sugars_g, fiber_g, sodium_mg, calcium_mg, iron_mg,
+                       vitamin_d_mcg, vitamin_c_mg, note
+                FROM recipe_nutrition
+                WHERE recipe_id = :recipe_id
+            """),
+            {"recipe_id": recipe_id},
+        ).first()
+    except Exception:
+        return None
+    if row is None:
+        return None
+    data = dict(row._mapping) if hasattr(row, "_mapping") else dict(row)
+    for key in NUTRITION_FIELDS:
+        data[key] = None if data.get(key) is None else float(data[key])
+    return data
+
+
+def _add_nutrition(total: dict, nutrition: dict | None, factor: float = 1.0) -> dict:
+    if not nutrition:
+        return total
+    for key in NUTRITION_FIELDS:
+        value = nutrition.get(key)
+        if value is not None:
+            total[key] = round(float(total.get(key, 0) or 0) + float(value) * factor, 2)
+    return total
+
 DAYS = [
     {"index": 0, "label": "Lunedì", "short": "Lun"},
     {"index": 1, "label": "Martedì", "short": "Mar"},
@@ -157,6 +212,56 @@ def ensure_schema_ready() -> None:
                 ON weekly_menu_items(weekly_menu_id, day_index, meal_type)
             """))
 
+        # Valori nutrizionali facoltativi per ricetta, basati su 1 persona.
+        if dialect == "postgresql":
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS recipe_nutrition (
+                    id SERIAL PRIMARY KEY,
+                    recipe_id INTEGER NOT NULL UNIQUE REFERENCES recipes(id) ON DELETE CASCADE,
+                    calories_kcal NUMERIC,
+                    protein_g NUMERIC,
+                    fat_total_g NUMERIC,
+                    saturated_fat_g NUMERIC,
+                    monounsaturated_fat_g NUMERIC,
+                    polyunsaturated_fat_g NUMERIC,
+                    carbohydrates_g NUMERIC,
+                    sugars_g NUMERIC,
+                    fiber_g NUMERIC,
+                    sodium_mg NUMERIC,
+                    calcium_mg NUMERIC,
+                    iron_mg NUMERIC,
+                    vitamin_d_mcg NUMERIC,
+                    vitamin_c_mg NUMERIC,
+                    note TEXT,
+                    created_at VARCHAR(40),
+                    updated_at VARCHAR(40)
+                )
+            """))
+        else:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS recipe_nutrition (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recipe_id INTEGER NOT NULL UNIQUE,
+                    calories_kcal NUMERIC,
+                    protein_g NUMERIC,
+                    fat_total_g NUMERIC,
+                    saturated_fat_g NUMERIC,
+                    monounsaturated_fat_g NUMERIC,
+                    polyunsaturated_fat_g NUMERIC,
+                    carbohydrates_g NUMERIC,
+                    sugars_g NUMERIC,
+                    fiber_g NUMERIC,
+                    sodium_mg NUMERIC,
+                    calcium_mg NUMERIC,
+                    iron_mg NUMERIC,
+                    vitamin_d_mcg NUMERIC,
+                    vitamin_c_mg NUMERIC,
+                    note TEXT,
+                    created_at VARCHAR(40),
+                    updated_at VARCHAR(40)
+                )
+            """))
+
     _schema_checked = True
 
 
@@ -289,6 +394,8 @@ def serialize_recipe(db: Session, recipe: Recipes | None) -> dict | None:
         "items_count": len(items),
         "estimated_total": round(total, 2),
         "estimated_per_serving": round(total / max(servings, 1), 2),
+        "nutrition": _nutrition_for_recipe(db, recipe.id),
+        "nutrition_basis": "per_person",
         "items": ingredients,
     }
 
@@ -316,14 +423,20 @@ def _serialize_menu(db: Session, menu: dict) -> dict:
     items = []
     total = 0.0
     planned = 0
+    nutrition_totals = _empty_nutrition()
+    daily_nutrition = {str(day["index"]): _empty_nutrition() for day in DAYS}
     for row in rows:
         item = _row_to_dict(row)
         recipe = db.query(Recipes).filter(Recipes.id == item["recipe_id"]).first()
         recipe_data = serialize_recipe(db, recipe)
+        factor = float(item.get("servings_override") or 1)
         if recipe_data:
-            total += float(recipe_data["estimated_total"] or 0)
+            total += float(recipe_data["estimated_total"] or 0) * factor
             planned += 1
+            _add_nutrition(nutrition_totals, recipe_data.get("nutrition"), factor)
+            _add_nutrition(daily_nutrition[str(item["day_index"])], recipe_data.get("nutrition"), factor)
         item["recipe"] = recipe_data
+        item["nutrition_factor"] = factor
         items.append(item)
 
     return {
@@ -334,6 +447,8 @@ def _serialize_menu(db: Session, menu: dict) -> dict:
         "summary": {
             "planned_meals": planned,
             "estimated_total": round(total, 2),
+            "nutrition_totals": nutrition_totals,
+            "daily_nutrition": daily_nutrition,
             "week_start": menu["week_start"],
             "week_end": menu["week_end"],
         },

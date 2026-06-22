@@ -6,7 +6,7 @@ from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 from starlette import status
 
@@ -24,7 +24,141 @@ def ensure_schema_ready() -> None:
     global _schema_checked
     if not _schema_checked:
         ensure_schema_compat(engine)
+        ensure_recipe_nutrition_schema()
         _schema_checked = True
+
+
+
+NUTRITION_FIELDS = [
+    "calories_kcal",
+    "protein_g",
+    "fat_total_g",
+    "saturated_fat_g",
+    "monounsaturated_fat_g",
+    "polyunsaturated_fat_g",
+    "carbohydrates_g",
+    "sugars_g",
+    "fiber_g",
+    "sodium_mg",
+    "calcium_mg",
+    "iron_mg",
+    "vitamin_d_mcg",
+    "vitamin_c_mg",
+]
+
+
+def ensure_recipe_nutrition_schema() -> None:
+    dialect = engine.dialect.name
+    with engine.begin() as conn:
+        if dialect == "postgresql":
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS recipe_nutrition (
+                    id SERIAL PRIMARY KEY,
+                    recipe_id INTEGER NOT NULL UNIQUE REFERENCES recipes(id) ON DELETE CASCADE,
+                    calories_kcal NUMERIC,
+                    protein_g NUMERIC,
+                    fat_total_g NUMERIC,
+                    saturated_fat_g NUMERIC,
+                    monounsaturated_fat_g NUMERIC,
+                    polyunsaturated_fat_g NUMERIC,
+                    carbohydrates_g NUMERIC,
+                    sugars_g NUMERIC,
+                    fiber_g NUMERIC,
+                    sodium_mg NUMERIC,
+                    calcium_mg NUMERIC,
+                    iron_mg NUMERIC,
+                    vitamin_d_mcg NUMERIC,
+                    vitamin_c_mg NUMERIC,
+                    note TEXT,
+                    created_at VARCHAR(40),
+                    updated_at VARCHAR(40)
+                )
+            """))
+        else:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS recipe_nutrition (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recipe_id INTEGER NOT NULL UNIQUE,
+                    calories_kcal NUMERIC,
+                    protein_g NUMERIC,
+                    fat_total_g NUMERIC,
+                    saturated_fat_g NUMERIC,
+                    monounsaturated_fat_g NUMERIC,
+                    polyunsaturated_fat_g NUMERIC,
+                    carbohydrates_g NUMERIC,
+                    sugars_g NUMERIC,
+                    fiber_g NUMERIC,
+                    sodium_mg NUMERIC,
+                    calcium_mg NUMERIC,
+                    iron_mg NUMERIC,
+                    vitamin_d_mcg NUMERIC,
+                    vitamin_c_mg NUMERIC,
+                    note TEXT,
+                    created_at VARCHAR(40),
+                    updated_at VARCHAR(40)
+                )
+            """))
+
+
+def _nutrition_payload(value: RecipeNutritionIn | None) -> dict | None:
+    if value is None:
+        return None
+    data = value.dict() if hasattr(value, "dict") else dict(value)
+    cleaned = {}
+    for key in NUTRITION_FIELDS:
+        raw = data.get(key)
+        cleaned[key] = None if raw in ("", None) else float(raw)
+    note = (data.get("note") or "").strip()
+    cleaned["note"] = note or None
+    if not any(cleaned.get(key) is not None for key in NUTRITION_FIELDS) and not cleaned.get("note"):
+        return None
+    return cleaned
+
+
+def serialize_nutrition(db: Session, recipe_id: int) -> dict | None:
+    row = db.execute(
+        text("""
+            SELECT calories_kcal, protein_g, fat_total_g, saturated_fat_g,
+                   monounsaturated_fat_g, polyunsaturated_fat_g, carbohydrates_g,
+                   sugars_g, fiber_g, sodium_mg, calcium_mg, iron_mg,
+                   vitamin_d_mcg, vitamin_c_mg, note
+            FROM recipe_nutrition
+            WHERE recipe_id = :recipe_id
+        """),
+        {"recipe_id": recipe_id},
+    ).first()
+    if row is None:
+        return None
+    data = dict(row._mapping) if hasattr(row, "_mapping") else dict(row)
+    for key in NUTRITION_FIELDS:
+        data[key] = None if data.get(key) is None else float(data[key])
+    return data
+
+
+def upsert_nutrition(db: Session, recipe_id: int, nutrition: RecipeNutritionIn | None) -> None:
+    data = _nutrition_payload(nutrition)
+    db.execute(text("DELETE FROM recipe_nutrition WHERE recipe_id = :recipe_id"), {"recipe_id": recipe_id})
+    if data is None:
+        return
+    now = datetime.utcnow().isoformat(timespec="seconds")
+    values = {"recipe_id": recipe_id, **data, "created_at": now, "updated_at": now}
+    db.execute(
+        text("""
+            INSERT INTO recipe_nutrition (
+                recipe_id, calories_kcal, protein_g, fat_total_g, saturated_fat_g,
+                monounsaturated_fat_g, polyunsaturated_fat_g, carbohydrates_g,
+                sugars_g, fiber_g, sodium_mg, calcium_mg, iron_mg,
+                vitamin_d_mcg, vitamin_c_mg, note, created_at, updated_at
+            )
+            VALUES (
+                :recipe_id, :calories_kcal, :protein_g, :fat_total_g, :saturated_fat_g,
+                :monounsaturated_fat_g, :polyunsaturated_fat_g, :carbohydrates_g,
+                :sugars_g, :fiber_g, :sodium_mg, :calcium_mg, :iron_mg,
+                :vitamin_d_mcg, :vitamin_c_mg, :note, :created_at, :updated_at
+            )
+        """),
+        values,
+    )
 
 
 def get_db():
@@ -50,6 +184,24 @@ class RecipeIngredientIn(BaseModel):
     is_optional: bool = False
 
 
+class RecipeNutritionIn(BaseModel):
+    calories_kcal: Optional[float] = Field(default=None, ge=0)
+    protein_g: Optional[float] = Field(default=None, ge=0)
+    fat_total_g: Optional[float] = Field(default=None, ge=0)
+    saturated_fat_g: Optional[float] = Field(default=None, ge=0)
+    monounsaturated_fat_g: Optional[float] = Field(default=None, ge=0)
+    polyunsaturated_fat_g: Optional[float] = Field(default=None, ge=0)
+    carbohydrates_g: Optional[float] = Field(default=None, ge=0)
+    sugars_g: Optional[float] = Field(default=None, ge=0)
+    fiber_g: Optional[float] = Field(default=None, ge=0)
+    sodium_mg: Optional[float] = Field(default=None, ge=0)
+    calcium_mg: Optional[float] = Field(default=None, ge=0)
+    iron_mg: Optional[float] = Field(default=None, ge=0)
+    vitamin_d_mcg: Optional[float] = Field(default=None, ge=0)
+    vitamin_c_mg: Optional[float] = Field(default=None, ge=0)
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
 class RecipeCreate(BaseModel):
     name: str = Field(min_length=2, max_length=140)
     description: Optional[str] = None
@@ -58,6 +210,7 @@ class RecipeCreate(BaseModel):
     prep_time_minutes: Optional[int] = Field(default=None, ge=0, le=600)
     instructions: Optional[str] = None
     items: list[RecipeIngredientIn] = Field(default_factory=list)
+    nutrition: Optional[RecipeNutritionIn] = None
 
 
 class RecipeUpdate(RecipeCreate):
@@ -319,6 +472,8 @@ def serialize_recipe(db: Session, recipe: Recipes, include_items: bool = True) -
         "items_count": len(items),
         "estimated_total": round(total, 2),
         "estimated_per_serving": round(total / servings, 2),
+        "nutrition": serialize_nutrition(db, recipe.id),
+        "nutrition_basis": "per_person",
         "items": serialized_items,
     }
 
@@ -357,8 +512,6 @@ def list_recipes(user: user_dependency, db: db_dependency):
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_recipe(user: user_dependency, db: db_dependency, request: RecipeCreate):
     require_recipe_extended_columns()
-    if not request.items:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aggiungi almeno un ingrediente dal catalogo")
     recipe = Recipes(name=request.name, image=request.image, owner_id=user.get("id"))
     _set_if_has(recipe, "description", request.description)
     _set_if_has(recipe, "servings", request.servings)
@@ -369,6 +522,7 @@ def create_recipe(user: user_dependency, db: db_dependency, request: RecipeCreat
     db.add(recipe)
     db.flush()
     create_or_update_items(db, recipe, request.items, replace=False)
+    upsert_nutrition(db, recipe.id, request.nutrition)
     db.commit()
     db.refresh(recipe)
     return serialize_recipe(db, recipe, include_items=True)
@@ -437,6 +591,7 @@ def update_recipe(user: user_dependency, db: db_dependency, recipe_id: int, requ
     _set_if_has(recipe, "prep_time_minutes", request.prep_time_minutes)
     _set_if_has(recipe, "instructions", request.instructions)
     create_or_update_items(db, recipe, request.items, replace=True)
+    upsert_nutrition(db, recipe.id, request.nutrition)
     db.commit()
     db.refresh(recipe)
     return serialize_recipe(db, recipe, include_items=True)
@@ -445,6 +600,7 @@ def update_recipe(user: user_dependency, db: db_dependency, recipe_id: int, requ
 @router.delete("/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_recipe(user: user_dependency, db: db_dependency, recipe_id: int):
     recipe = ensure_owned_recipe(db, recipe_id, user.get("id"))
+    db.execute(text("DELETE FROM recipe_nutrition WHERE recipe_id = :recipe_id"), {"recipe_id": recipe.id})
     db.query(RecipeItems).filter(RecipeItems.recipe_id == recipe.id).delete(synchronize_session=False)
     db.delete(recipe)
     db.commit()

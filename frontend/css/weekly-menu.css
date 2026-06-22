@@ -123,3 +123,63 @@
   border-color: rgba(22, 163, 74, 0.55);
   box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.10);
 }
+
+
+/* v28 nutrition weekly menu */
+.nutrition-stat {
+  background: linear-gradient(180deg, #f0fdf4, #ffffff);
+  border-color: rgba(34, 197, 94, .20);
+}
+
+.recipe-nutrition-mini {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.recipe-nutrition-mini span {
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: #ecfdf5;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.recipe-nutrition-mini .muted {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+.weekly-nutrition-summary {
+  margin: 18px 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.weekly-nutrition-summary div {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, .9);
+  border-radius: 18px;
+  padding: 12px;
+}
+
+.weekly-nutrition-summary span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.weekly-nutrition-summary strong {
+  color: #14532d;
+  font-size: 20px;
+}
+
+@media (max-width: 900px) {
+  .weekly-nutrition-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -1,5 +1,5 @@
 import CONFIG from "./config.js";
-console.log("weekly-menu v27i notes and multi pdf loaded");
+console.log("weekly-menu v28 nutrition loaded");
 
 const DAYS = [
   { index: 0, label: "Lunedi", short: "Lun" },
@@ -134,6 +134,86 @@ function money(value) {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(Number(value || 0));
 }
 
+
+const NUTRITION_FIELDS = [
+  ["calories_kcal", "Kcal", "kcal"],
+  ["protein_g", "Proteine", "g"],
+  ["fat_total_g", "Grassi", "g"],
+  ["saturated_fat_g", "Saturi", "g"],
+  ["monounsaturated_fat_g", "Monoinsaturi", "g"],
+  ["polyunsaturated_fat_g", "Polinsaturi", "g"],
+  ["carbohydrates_g", "Carboidrati", "g"],
+  ["sugars_g", "Zuccheri", "g"],
+  ["fiber_g", "Fibre", "g"],
+  ["sodium_mg", "Sodio", "mg"],
+  ["calcium_mg", "Calcio", "mg"],
+  ["iron_mg", "Ferro", "mg"],
+  ["vitamin_d_mcg", "Vit. D", "mcg"],
+  ["vitamin_c_mg", "Vit. C", "mg"],
+];
+
+function fmtMacro(value, decimals = 0) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return "0";
+  return n.toLocaleString("it-IT", { maximumFractionDigits: decimals });
+}
+
+function emptyNutrition() {
+  return Object.fromEntries(NUTRITION_FIELDS.map(([key]) => [key, 0]));
+}
+
+function addNutrition(total, nutrition, factor = 1) {
+  if (!nutrition) return total;
+  for (const [key] of NUTRITION_FIELDS) {
+    const value = nutrition[key];
+    if (value !== null && value !== undefined && value !== "") {
+      total[key] = Number(total[key] || 0) + Number(value || 0) * factor;
+    }
+  }
+  return total;
+}
+
+function itemFactor(item) {
+  return Number(item?.servings_override || item?.nutrition_factor || 1);
+}
+
+function nutritionForItems(items) {
+  return items.reduce((sum, item) => addNutrition(sum, item.recipe?.nutrition, itemFactor(item)), emptyNutrition());
+}
+
+function weeklyNutritionTotals() {
+  return nutritionForItems(currentMenu?.items || []);
+}
+
+function macroMiniHtml(nutrition) {
+  if (!nutrition) return `<span class="muted">macro n/d</span>`;
+  const parts = [];
+  if (nutrition.calories_kcal) parts.push(`<span>${fmtMacro(nutrition.calories_kcal)} kcal</span>`);
+  if (nutrition.protein_g) parts.push(`<span>P ${fmtMacro(nutrition.protein_g, 1)}g</span>`);
+  if (nutrition.carbohydrates_g) parts.push(`<span>C ${fmtMacro(nutrition.carbohydrates_g, 1)}g</span>`);
+  if (nutrition.fat_total_g) parts.push(`<span>G ${fmtMacro(nutrition.fat_total_g, 1)}g</span>`);
+  if (nutrition.fiber_g) parts.push(`<span>Fibre ${fmtMacro(nutrition.fiber_g, 1)}g</span>`);
+  return parts.length ? parts.join("") : `<span class="muted">macro n/d</span>`;
+}
+
+function nutritionLineText(nutrition) {
+  if (!nutrition) return "Macro non inseriti";
+  const parts = [];
+  if (nutrition.calories_kcal) parts.push(`${fmtMacro(nutrition.calories_kcal)} kcal`);
+  if (nutrition.protein_g) parts.push(`P ${fmtMacro(nutrition.protein_g, 1)}g`);
+  if (nutrition.carbohydrates_g) parts.push(`C ${fmtMacro(nutrition.carbohydrates_g, 1)}g`);
+  if (nutrition.fat_total_g) parts.push(`G ${fmtMacro(nutrition.fat_total_g, 1)}g`);
+  if (nutrition.fiber_g) parts.push(`Fibre ${fmtMacro(nutrition.fiber_g, 1)}g`);
+  return parts.length ? parts.join(" - ") : "Macro non inseriti";
+}
+
+function drawNutritionLine(doc, nutrition, x, y, maxWidth, fontSize = 7.2) {
+  doc.setTextColor(...PDF_GREEN_DARK);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(fontSize);
+  doc.text(doc.splitTextToSize(nutritionLineText(nutrition), maxWidth).slice(0, 2), x, y);
+}
+
 function normalizeImageUrl(path) {
   if (!path) return `${window.location.origin}/static/images/placeholder.jpg`;
 
@@ -177,6 +257,11 @@ function renderStats() {
   $("plannedCount").textContent = currentMenu?.summary?.planned_meals || 0;
   $("estimatedTotal").textContent = money(currentMenu?.summary?.estimated_total || 0);
   $("recipesCount").textContent = recipes.length;
+  const n = currentMenu?.summary?.nutrition_totals || weeklyNutritionTotals();
+  if ($("weeklyCalories")) $("weeklyCalories").textContent = fmtMacro(n.calories_kcal || 0);
+  if ($("weeklyProtein")) $("weeklyProtein").textContent = `${fmtMacro(n.protein_g || 0, 1)}g`;
+  if ($("weeklyCarbs")) $("weeklyCarbs").textContent = `${fmtMacro(n.carbohydrates_g || 0, 1)}g`;
+  if ($("weeklyFats")) $("weeklyFats").textContent = `${fmtMacro(n.fat_total_g || 0, 1)}g`;
 }
 
 function renderPlanner() {
@@ -239,6 +324,7 @@ function renderMealSlot(day, meal) {
               <div>
                 <h4>${escapeHTML(recipe.name)}</h4>
                 ${item.notes ? `<p class="menu-item-note">${escapeHTML(item.notes)}</p>` : ""}
+                <div class="recipe-nutrition-mini">${macroMiniHtml(recipe.nutrition)}</div>
                 <div class="recipe-meta">
                   <span>${recipe.prep_time_minutes ? `${recipe.prep_time_minutes} min` : "tempo n/d"}</span>
                   <span>${recipe.servings || 1} porz.</span>
@@ -464,6 +550,12 @@ async function drawPlannerOverviewPage(doc) {
   drawSummaryPill(doc, pageW - 76, 14, 30, 7, `${countDaysWithMeals()} giorni`);
   drawSummaryPill(doc, pageW - 42, 14, 34, 7, money(currentMenu.summary.estimated_total || 0));
 
+  const weekNut = currentMenu?.summary?.nutrition_totals || weeklyNutritionTotals();
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.2);
+  doc.text(`Macro settimana: ${nutritionLineText(weekNut)}`, margin + 7, 31.2);
+
   for (const day of DAYS) {
     const x = margin + day.index * colW;
     const dayDate = addDays(currentWeekStart, day.index);
@@ -536,28 +628,89 @@ async function drawMiniSlot(doc, x, y, w, h, meal, items) {
 
   doc.setTextColor(...PDF_GREEN_DARK);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.3);
+  doc.setFontSize(6.4);
   doc.text(`${meal.label}`, x + 2, y + 4.8);
 
-  const names = items.map(item => item.recipe?.name || "Ricetta");
-  doc.setTextColor(...PDF_SLATE);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(5.9);
+  const total = items.reduce((sum, item) => sum + Number(item?.recipe?.estimated_total || 0), 0);
+  const visibleItems = items.slice(0, 3);
+  const rowTop = y + 7.0;
+  const rowGap = 1.15;
+  const availableH = h - 14.2;
+  const rowH = Math.max(5.8, Math.min(8.0, (availableH - rowGap * (visibleItems.length - 1)) / Math.max(visibleItems.length, 1)));
 
-  let lineY = y + 10.8;
-  for (const name of names.slice(0, 4)) {
-    const lines = doc.splitTextToSize(`- ${name}`, w - 4).slice(0, 1);
-    doc.text(lines, x + 2, lineY);
-    lineY += 6.2;
-    if (lineY > y + h - 4) break;
+  for (let idx = 0; idx < visibleItems.length; idx++) {
+    const item = visibleItems[idx];
+    const recipe = item.recipe || {};
+    const rowY = rowTop + idx * (rowH + rowGap);
+
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(x + 1.7, rowY, w - 3.4, rowH, 2, 2, "FD");
+
+    const imgSize = Math.max(4.9, Math.min(6.7, rowH - 1.1));
+    const imgX = x + 2.5;
+    const imgY = rowY + (rowH - imgSize) / 2;
+
+    doc.setFillColor(...PDF_GREEN_SOFT);
+    doc.roundedRect(imgX, imgY, imgSize, imgSize, 1.4, 1.4, "F");
+
+    // Testo PRIMA dell'immagine: anche se l'immagine AVIF/CORS si blocca, nome e prezzo restano.
+    const name = cleanPdfName(recipe.name || "Ricetta");
+    const textX = imgX + imgSize + 1.5;
+    const textW = w - (textX - x) - 3.0;
+    const fitted = fitPdfText(doc, name, textW, rowH >= 7.0 ? 6.0 : 5.35, 4.45);
+
+    doc.setTextColor(...PDF_SLATE);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fitted.fontSize);
+    doc.text(fitted.text, textX, rowY + rowH / 2 + fitted.fontSize * 0.33);
+
+    const image = await safeLoadPdfImage(recipe.image, 900);
+    if (image?.data) {
+      try {
+        doc.addImage(image.data, image.format, imgX, imgY, imgSize, imgSize, undefined, "FAST");
+      } catch (err) {
+        console.warn("PDF overview image skipped", recipe.image, err);
+      }
+    }
   }
 
-  if (names.length > 4) {
+  if (items.length > 3) {
     doc.setTextColor(...PDF_GREEN_DARK);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(5.8);
-    doc.text(`+ altre ${names.length - 4}`, x + w - 2, y + h - 3, { align: "right" });
+    doc.setFontSize(5.3);
+    doc.text(`+${items.length - 3} altre`, x + w - 2, y + h - 2.3, { align: "right" });
+  } else {
+    doc.setTextColor(...PDF_GREEN_DARK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(5.2);
+    doc.text(money(total), x + w - 2, y + h - 2.3, { align: "right" });
   }
+}
+
+function cleanPdfName(value) {
+  return String(value || "Ricetta")
+    .replace(/\s+/g, " ")
+    .replace(/^[-–—\s]+/, "")
+    .trim();
+}
+
+function fitPdfText(doc, text, maxWidth, startFontSize = 6, minFontSize = 4.4) {
+  let value = cleanPdfName(text);
+  let fontSize = startFontSize;
+
+  while (fontSize > minFontSize) {
+    doc.setFontSize(fontSize);
+    if (doc.getTextWidth(value) <= maxWidth) return { text: value, fontSize };
+    fontSize -= 0.25;
+  }
+
+  doc.setFontSize(minFontSize);
+  while (value.length > 3 && doc.getTextWidth(`${value.slice(0, -1)}...`) > maxWidth) {
+    value = value.slice(0, -1);
+  }
+
+  return { text: value.length > 3 ? `${value}...` : value, fontSize: minFontSize };
 }
 
 async function drawDayPage(doc, day) {
@@ -680,25 +833,24 @@ async function drawDayRecipeCard(doc, x, y, w, h, meal, item) {
   doc.setFillColor(241, 245, 249);
   doc.roundedRect(x + 4, imageY, w - 8, imageH, 5, 5, "F");
 
-  if (!item?.recipe) return;
-
-  const recipe = item.recipe;
-  const image = await loadPdfImage(recipe.image);
-  if (image?.data) {
-    try {
-      doc.addImage(image.data, image.format, x + 4, imageY, w - 8, imageH, undefined, "FAST");
-    } catch (err) {
-      console.warn("PDF day image skipped", recipe.image, err);
-    }
+  if (!item?.recipe) {
+    doc.setTextColor(...PDF_MUTED);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Ricetta non disponibile", x + 6, imageY + imageH + 12);
+    return;
   }
 
+  const recipe = item.recipe;
   const textX = x + 5;
   let cursorY = imageY + imageH + 8;
 
+  // Testo PRIMA dell'immagine: non deve sparire se l'immagine e problematica.
   doc.setTextColor(...PDF_SLATE);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11.2);
-  const titleLines = doc.splitTextToSize(recipe.name || "", w - 10).slice(0, 2);
+  const title = cleanPdfName(recipe.name || "Ricetta");
+  const titleLines = doc.splitTextToSize(title, w - 10).slice(0, 2);
   doc.text(titleLines, textX, cursorY);
   cursorY += 6.3 * titleLines.length + 1;
 
@@ -708,7 +860,9 @@ async function drawDayRecipeCard(doc, x, y, w, h, meal, item) {
   meta.push(`${recipe.items_count || 0} ingredienti`);
   meta.push(money(recipe.estimated_total));
   drawInlineTags(doc, textX, cursorY, meta, w - 10);
-  cursorY += 11;
+  cursorY += 8;
+  drawNutritionLine(doc, recipe.nutrition, textX, cursorY, w - 10, 7.4);
+  cursorY += 10;
 
   if (item.notes) {
     doc.setFillColor(248, 250, 252);
@@ -718,6 +872,20 @@ async function drawDayRecipeCard(doc, x, y, w, h, meal, item) {
     doc.setFontSize(7.8);
     const noteLines = doc.splitTextToSize(cleanSnippet(item.notes), w - 12).slice(0, 3);
     doc.text(noteLines, textX + 1, cursorY + 1);
+  }
+
+  const image = await safeLoadPdfImage(recipe.image, 1200);
+  if (image?.data) {
+    try {
+      doc.addImage(image.data, image.format, x + 4, imageY, w - 8, imageH, undefined, "FAST");
+    } catch (err) {
+      console.warn("PDF day image skipped", recipe.image, err);
+    }
+  } else {
+    doc.setTextColor(148, 163, 184);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Immagine non convertibile nel PDF", x + w / 2, imageY + imageH / 2, { align: "center" });
   }
 }
 
@@ -811,7 +979,7 @@ async function drawRecipeDetailCard(doc, x, y, w, h, recipe, menuNotes = []) {
 
   doc.setFillColor(...PDF_GREEN_SOFT);
   doc.roundedRect(imgX, imgY, imgW, imgH, 4, 4, "F");
-  const image = await loadPdfImage(recipe.image);
+  const image = await safeLoadPdfImage(recipe.image, 1200);
   if (image?.data) {
     try {
       doc.addImage(image.data, image.format, imgX, imgY, imgW, imgH, undefined, "FAST");
@@ -831,12 +999,13 @@ async function drawRecipeDetailCard(doc, x, y, w, h, recipe, menuNotes = []) {
   doc.setFontSize(8);
   const metaLine = `${recipe.items_count || 0} ingredienti - ${recipe.servings || 1} porzioni - ${recipe.prep_time_minutes ? `${recipe.prep_time_minutes} min - ` : ""}${money(recipe.estimated_total)}`;
   doc.text(metaLine, textX, y + 22);
+  drawNutritionLine(doc, recipe.nutrition, textX, y + 30, w - 62, 7.2);
 
   const ingredientLines = buildIngredientLines(recipe.items || []);
   doc.setTextColor(...PDF_SLATE);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.1);
-  doc.text(doc.splitTextToSize(ingredientLines.join("\\n"), w - 62).slice(0, 7), textX, y + 31);
+  doc.text(doc.splitTextToSize(ingredientLines.join("\\n"), w - 62).slice(0, 5), textX, y + 39);
 
   if (menuNotes.length) {
     doc.setFillColor(248, 250, 252);
@@ -869,24 +1038,47 @@ function cleanSnippet(text) {
 
 const imageCache = new Map();
 
+async function safeLoadPdfImage(path, timeoutMs = 1200) {
+  try {
+    return await Promise.race([
+      loadPdfImage(path),
+      new Promise(resolve => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+  } catch (err) {
+    console.warn("PDF image skipped safely", path, err);
+    return null;
+  }
+}
+
 async function loadPdfImage(path) {
   if (!path) return null;
 
   const url = normalizeImageUrl(path);
   if (imageCache.has(url)) return imageCache.get(url);
 
+  // jsPDF non supporta bene AVIF o immagini con estensione cambiata a mano.
+  // Quindi convertiamo prima in JPEG via canvas: se il browser la vede nel sito,
+  // quasi sempre il canvas riesce a convertirla in un formato PDF-safe.
   try {
     const res = await fetch(url, { mode: "cors", cache: "force-cache" });
     if (res.ok) {
       const blob = await res.blob();
-      const data = await blobToDataURL(blob);
-      const format = detectImageFormat(data, blob.type);
-      const result = { data, format };
-      imageCache.set(url, result);
-      return result;
+      try {
+        const data = await blobToCanvasDataURL(blob);
+        const result = { data, format: "JPEG" };
+        imageCache.set(url, result);
+        return result;
+      } catch (canvasErr) {
+        console.warn("PDF blob canvas conversion failed, trying raw data URL", url, canvasErr);
+        const data = await blobToDataURL(blob);
+        const format = detectImageFormat(data, blob.type);
+        const result = { data, format };
+        imageCache.set(url, result);
+        return result;
+      }
     }
   } catch (err) {
-    console.warn("PDF fetch image failed, trying canvas", url, err);
+    console.warn("PDF fetch image failed, trying image canvas", url, err);
   }
 
   try {
@@ -907,6 +1099,43 @@ function detectImageFormat(dataUrl, mimeType = "") {
   if (s.includes("image/png")) return "PNG";
   if (s.includes("image/webp")) return "WEBP";
   return "JPEG";
+}
+
+function blobToCanvasDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const img = new Image();
+
+    img.onload = () => {
+      try {
+        const maxSize = 960;
+        const width = img.naturalWidth || img.width || maxSize;
+        const height = img.naturalHeight || img.height || maxSize;
+        const scale = Math.min(1, maxSize / Math.max(width, height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        const ctx = canvas.getContext("2d");
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        URL.revokeObjectURL(objectUrl);
+        resolve(canvas.toDataURL("image/jpeg", 0.9));
+      } catch (err) {
+        URL.revokeObjectURL(objectUrl);
+        reject(err);
+      }
+    };
+
+    img.onerror = (err) => {
+      URL.revokeObjectURL(objectUrl);
+      reject(err);
+    };
+
+    img.src = objectUrl;
+  });
 }
 
 function imageToCanvasDataURL(url) {

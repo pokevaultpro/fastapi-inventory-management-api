@@ -38,6 +38,93 @@ const euro = (v) => Number(v || 0).toLocaleString("it-IT", { style: "currency", 
 const img = (src) => src || "/static/images/placeholder.jpg";
 const currentPrice = (p) => Number(p?.current_price ?? (p?.discounted_price || p?.original_price || 0));
 
+const NUTRITION_FIELDS = [
+  ["calories_kcal", "Kcal", "kcal"],
+  ["protein_g", "Proteine", "g"],
+  ["fat_total_g", "Grassi", "g"],
+  ["saturated_fat_g", "Saturi", "g"],
+  ["monounsaturated_fat_g", "Monoinsaturi", "g"],
+  ["polyunsaturated_fat_g", "Polinsaturi", "g"],
+  ["carbohydrates_g", "Carboidrati", "g"],
+  ["sugars_g", "Zuccheri", "g"],
+  ["fiber_g", "Fibre", "g"],
+  ["sodium_mg", "Sodio", "mg"],
+  ["calcium_mg", "Calcio", "mg"],
+  ["iron_mg", "Ferro", "mg"],
+  ["vitamin_d_mcg", "Vitamina D", "mcg"],
+  ["vitamin_c_mg", "Vitamina C", "mg"],
+];
+
+const MAIN_NUTRITION = ["calories_kcal", "protein_g", "carbohydrates_g", "fat_total_g", "fiber_g"];
+
+function fmtNum(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, "");
+}
+
+function nutritionMainHtml(nutrition) {
+  if (!nutrition) return `<span class="nutrition-empty">Nutrizione non inserita</span>`;
+  const labels = {
+    calories_kcal: ["kcal", "kcal"],
+    protein_g: ["P", "g"],
+    carbohydrates_g: ["C", "g"],
+    fat_total_g: ["G", "g"],
+    fiber_g: ["Fibre", "g"],
+  };
+  const parts = MAIN_NUTRITION
+    .map(key => {
+      const value = fmtNum(nutrition[key]);
+      return value ? `<span>${labels[key][0]} ${value}${labels[key][1]}</span>` : "";
+    })
+    .filter(Boolean);
+  return parts.length ? parts.join("") : `<span class="nutrition-empty">Nutrizione non inserita</span>`;
+}
+
+function nutritionDetailHtml(nutrition) {
+  if (!nutrition) return `<div class="nutrition-empty-box">Nessun valore nutrizionale salvato per questa ricetta.</div>`;
+  const rows = NUTRITION_FIELDS
+    .map(([key, label, unit]) => {
+      const value = fmtNum(nutrition[key]);
+      return value ? `<div><span>${label}</span><strong>${value} ${unit}</strong></div>` : "";
+    })
+    .filter(Boolean)
+    .join("");
+  return `
+    <section class="nutrition-detail-box">
+      <div class="nutrition-detail-head"><h3>Valori nutrizionali</h3><span>per 1 persona</span></div>
+      <div class="nutrition-detail-grid">${rows || `<div><span>Nessun dato</span><strong>-</strong></div>`}</div>
+      ${nutrition.note ? `<p>${escapeHtml(nutrition.note)}</p>` : ""}
+    </section>
+  `;
+}
+
+function readNutritionForm() {
+  const nutrition = {};
+  let hasAny = false;
+  for (const [key] of NUTRITION_FIELDS) {
+    const el = document.getElementById(`nut-${key}`);
+    const raw = el?.value?.trim();
+    nutrition[key] = raw ? Number(raw) : null;
+    if (raw) hasAny = true;
+  }
+  const note = document.getElementById("nut-note")?.value?.trim() || "";
+  nutrition.note = note || null;
+  if (note) hasAny = true;
+  return hasAny ? nutrition : null;
+}
+
+function writeNutritionForm(nutrition) {
+  for (const [key] of NUTRITION_FIELDS) {
+    const el = document.getElementById(`nut-${key}`);
+    if (el) el.value = nutrition?.[key] ?? "";
+  }
+  const noteEl = document.getElementById("nut-note");
+  if (noteEl) noteEl.value = nutrition?.note || "";
+}
+
+
 function toast(message) {
   const el = document.getElementById("toast");
   el.textContent = message;
@@ -82,6 +169,7 @@ function renderRecipes() {
           <span class="recipe-source">${r.source_type === "personal" ? "Personale" : "Sistema"}</span>
         </div>
         <p>${escapeHtml(r.description || "Ricetta personale pronta da aggiungere alla lista della spesa.")}</p>
+        <div class="nutrition-mini">${nutritionMainHtml(r.nutrition)}</div>
         <div class="recipe-stats">
           <span>${r.items_count || 0} ingredienti</span>
           <span>${r.servings || 1} porz.</span>
@@ -161,10 +249,11 @@ function openBuilder(recipe = null) {
 
   document.getElementById("recipe-name").value = recipe?.name || "";
   document.getElementById("recipe-image").value = recipe?.image || "";
-  document.getElementById("recipe-servings").value = recipe?.servings || 2;
+  document.getElementById("recipe-servings").value = recipe?.servings || 1;
   document.getElementById("recipe-time").value = recipe?.prep_time_minutes || "";
   document.getElementById("recipe-description").value = recipe?.description || "";
   document.getElementById("recipe-instructions").value = recipe?.instructions || "";
+  writeNutritionForm(recipe?.nutrition || null);
 
   if (recipe?.items?.length) {
     selectedIngredients = recipe.items
@@ -254,7 +343,7 @@ function renderSelectedIngredients() {
   const box = document.getElementById("selected-ingredients");
 
   if (!selectedIngredients.length) {
-    box.innerHTML = `<div class="empty-state">Aggiungi prodotti dal catalogo. La ricetta sarà salvata solo quando premi “Salva ricetta”.</div>`;
+    box.innerHTML = `<div class="empty-state">Ingredienti opzionali. Puoi salvare la ricetta anche senza prodotti, usando solo foto e valori nutrizionali.</div>`;
   } else {
     box.innerHTML = selectedIngredients.map((i, idx) => `
       <div class="ingredient-row">
@@ -303,11 +392,6 @@ function updateBuilderTotal() {
 async function submitRecipe(e) {
   e.preventDefault();
 
-  if (!selectedIngredients.length) {
-    toast("Aggiungi almeno un ingrediente prima di salvare");
-    return;
-  }
-
   const payload = {
     name: document.getElementById("recipe-name").value.trim(),
     image: document.getElementById("recipe-image").value.trim() || null,
@@ -315,6 +399,7 @@ async function submitRecipe(e) {
     prep_time_minutes: document.getElementById("recipe-time").value ? Number(document.getElementById("recipe-time").value) : null,
     description: document.getElementById("recipe-description").value.trim() || null,
     instructions: document.getElementById("recipe-instructions").value.trim() || null,
+    nutrition: readNutritionForm(),
     items: selectedIngredients.map(i => ({
       product_id: i.product_id,
       quantity: Number(i.quantity || 1),
@@ -353,6 +438,7 @@ async function openDetail(id) {
         <h2>${escapeHtml(r.name)}</h2>
         <p>${escapeHtml(r.description || "Seleziona cosa aggiungere e regola le quantità prima di creare la lista.")}</p>
         <div class="daily-meta"><span class="chip green">${euro(r.estimated_total)} totali</span><span class="chip">${r.servings} porzioni</span><span class="chip orange">${r.items_count} ingredienti</span></div>
+        ${nutritionDetailHtml(r.nutrition)}
         ${r.instructions ? `<div class="recipe-instructions-box"><h3>Istruzioni</h3><p>${formatMultiline(r.instructions)}</p></div>` : `<div class="recipe-instructions-box muted"><h3>Istruzioni</h3><p>Nessuna istruzione salvata per questa ricetta.</p></div>`}
         <div class="detail-top-actions">
           <button type="button" class="ghost-btn" id="edit-current-recipe">Modifica</button>
@@ -361,7 +447,7 @@ async function openDetail(id) {
       </div>
     </div>
     <div class="ingredient-checks">
-      ${r.items.map(it => `
+      ${r.items.length ? r.items.map(it => `
         <label class="check-row">
           <input type="checkbox" data-item="${it.id}" checked>
           <img src="${img(it.product?.image)}" onerror="this.src='/static/images/placeholder.jpg'">
@@ -371,7 +457,7 @@ async function openDetail(id) {
             ${(it.cheaper_alternatives || []).length ? `<div class="alt-box">Risparmio possibile: ${escapeHtml(it.cheaper_alternatives[0].product.name)} (${euro(it.cheaper_alternatives[0].product.current_price)})</div>` : ""}
           </div>
           <input type="number" min="1" value="${it.cart_quantity || 1}" data-qty="${it.id}">
-        </label>`).join("")}
+        </label>`).join("") : `<div class="empty-state">Questa ricetta non ha ingredienti salvati. Puoi usarla comunque nel menu settimanale e nel riepilogo nutrizionale.</div>`}
     </div>
     <div class="detail-footer"><strong>Totale stimato: ${euro(r.estimated_total)}</strong><button type="button" class="primary-btn" id="add-recipe-cart">Aggiungi selezionati alla lista</button></div>
   `;

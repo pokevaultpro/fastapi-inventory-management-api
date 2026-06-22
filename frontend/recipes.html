@@ -44,21 +44,50 @@
 <section class="recipe-builder hidden" id="recipe-builder">
   <div class="builder-card">
     <button class="close-builder" id="close-builder">×</button>
-    <div class="builder-head"><h2 id="builder-title">Nuova ricetta</h2><p>Seleziona ingredienti dal catalogo prodotti: così la lista della spesa resta precisa.</p></div>
+    <div class="builder-head"><h2 id="builder-title">Nuova ricetta</h2><p>Ingredienti opzionali: puoi salvare anche solo foto e valori nutrizionali per 1 persona.</p></div>
     <form id="recipe-form" class="recipe-form">
       <div class="form-grid">
         <label>Nome ricetta<input id="recipe-name" required minlength="2" placeholder="Es. Pasta fredda proteica"></label>
         <label>Foto / URL immagine<input id="recipe-image" placeholder="https://... oppure /static/images/..."></label>
-        <label>Porzioni<input id="recipe-servings" type="number" min="1" value="2"></label>
+        <label>Persone / porzioni<input id="recipe-servings" type="number" min="1" value="1"></label>
         <label>Tempo prep. min<input id="recipe-time" type="number" min="0" placeholder="20"></label>
       </div>
       <label>Descrizione<textarea id="recipe-description" rows="3" placeholder="Quando la prepari, perché è utile, consigli..."></textarea></label>
       <label>Istruzioni<textarea id="recipe-instructions" rows="4" placeholder="Passaggi principali"></textarea></label>
 
+      <section class="nutrition-box">
+        <div class="nutrition-head">
+          <div>
+            <h3>Valori nutrizionali per 1 persona</h3>
+            <p>Facoltativi. Non vengono calcolati dagli ingredienti: sono valori propri della ricetta già preparata.</p>
+          </div>
+          <span class="nutrition-pill">per 1 persona</span>
+        </div>
+
+        <div class="nutrition-grid">
+          <label>Kcal<input id="nut-calories_kcal" type="number" min="0" step="0.1" placeholder="520"></label>
+          <label>Proteine g<input id="nut-protein_g" type="number" min="0" step="0.1"></label>
+          <label>Carboidrati g<input id="nut-carbohydrates_g" type="number" min="0" step="0.1"></label>
+          <label>Grassi totali g<input id="nut-fat_total_g" type="number" min="0" step="0.1"></label>
+          <label>Zuccheri g<input id="nut-sugars_g" type="number" min="0" step="0.1"></label>
+          <label>Fibre g<input id="nut-fiber_g" type="number" min="0" step="0.1"></label>
+          <label>Grassi saturi g<input id="nut-saturated_fat_g" type="number" min="0" step="0.1"></label>
+          <label>Grassi monoinsaturi g<input id="nut-monounsaturated_fat_g" type="number" min="0" step="0.1"></label>
+          <label>Grassi polinsaturi g<input id="nut-polyunsaturated_fat_g" type="number" min="0" step="0.1"></label>
+          <label>Sodio mg<input id="nut-sodium_mg" type="number" min="0" step="0.1"></label>
+          <label>Calcio mg<input id="nut-calcium_mg" type="number" min="0" step="0.1"></label>
+          <label>Ferro mg<input id="nut-iron_mg" type="number" min="0" step="0.1"></label>
+          <label>Vitamina D µg<input id="nut-vitamin_d_mcg" type="number" min="0" step="0.1"></label>
+          <label>Vitamina C mg<input id="nut-vitamin_c_mg" type="number" min="0" step="0.1"></label>
+        </div>
+        <label>Nota nutrizionale<textarea id="nut-note" rows="2" placeholder="Es. valori stimati sulla porzione servita, ricetta cotta, ecc."></textarea></label>
+      </section>
+
+
       <div class="ingredient-picker">
         <div class="picker-left">
-          <h3>Aggiungi ingredienti</h3>
-          <input id="product-search" placeholder="Cerca prodotto catalogo: uova, pasta, tonno...">
+          <h3>Ingredienti opzionali</h3>
+          <input id="product-search" placeholder="Facoltativo: cerca prodotto catalogo...">
           <div id="product-results" class="product-results"></div>
         </div>
         <div class="picker-right">
